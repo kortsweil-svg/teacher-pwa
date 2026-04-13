@@ -352,24 +352,8 @@
 </main>
 
 <script>
-const KEY = 'screentime_teacher_v1';
-
-const DEMO = [
-  {id:1,name:"דניאל כהן",initials:"דכ",cls:"ט׳2",platform:"iOS",hours:4.2,consent:true,weeklyData:[3.8,4.5,4.1,5.2,4.0,3.5,4.2]},
-  {id:2,name:"נועה לוי",initials:"נל",cls:"ט׳2",platform:"Android",hours:2.8,consent:true,weeklyData:[2.2,3.1,2.9,2.5,3.0,2.8,2.7]},
-  {id:3,name:"יוסף אזולאי",initials:"יא",cls:"ט׳2",platform:"iOS",hours:8.7,consent:true,weeklyData:[7.5,9.1,8.8,9.2,8.5,7.9,8.7]},
-  {id:4,name:"שירה מזרחי",initials:"שמ",cls:"י׳1",platform:"Android",hours:6.1,consent:true,weeklyData:[5.5,6.3,6.0,6.8,5.9,6.2,6.1]},
-  {id:5,name:"איתי ברק",initials:"אב",cls:"י׳1",platform:"iOS",hours:1.9,consent:true,weeklyData:[2.1,1.8,1.5,2.0,2.2,1.7,1.9]},
-  {id:6,name:"מאיה פרץ",initials:"מפ",cls:"ט׳2",platform:"iOS",hours:9.2,consent:true,weeklyData:[8.8,9.5,9.0,10.1,9.3,8.7,9.2]},
-  {id:7,name:"רון גולדברג",initials:"רג",cls:"י׳1",platform:"Android",hours:3.4,consent:false,weeklyData:[3.2,3.5,3.3,3.6,3.4,3.1,3.4]},
-  {id:8,name:"ליאת שפירא",initials:"לש",cls:"ט׳2",platform:"iOS",hours:5.5,consent:true,weeklyData:[5.0,5.8,5.3,6.0,5.4,5.2,5.5]}
-];
-
-function load() {
-  try { const d = localStorage.getItem(KEY); if(d) return JSON.parse(d); } catch(e){}
-  return JSON.parse(JSON.stringify(DEMO));
-}
-function save(d) { try { localStorage.setItem(KEY, JSON.stringify(d)); } catch(e){} }
+const SERVER = 'https://screentime-server.onrender.com';
+let cachedData = [];
 
 function color(h) { return h<3?'#3B6D11':h<6?'#854F0B':'#A32D2D'; }
 function badge(h,consent) {
@@ -377,6 +361,21 @@ function badge(h,consent) {
   if(h<3) return '<span class="badge badge-green">תקין</span>';
   if(h<6) return '<span class="badge badge-amber">מתון</span>';
   return '<span class="badge badge-red">גבוה</span>';
+}
+
+async function fetchData() {
+  try {
+    const res = await fetch(`${SERVER}/api/reports`);
+    cachedData = await res.json();
+  } catch(e) {
+    console.error('שגיאה בטעינת נתונים:', e);
+  }
+  return cachedData;
+}
+
+function showLoading(id) {
+  const el = document.getElementById(id);
+  if(el) el.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text2);font-size:14px">טוען...</div>';
 }
 
 function showScreen(s) {
@@ -388,8 +387,9 @@ function showScreen(s) {
   if(s==='add') renderManage();
 }
 
-function renderDashboard() {
-  const data = load();
+async function renderDashboard() {
+  showLoading('dash-metrics');
+  const data = await fetchData();
   const active = data.filter(s=>s.consent);
   const avg = active.length ? (active.reduce((a,s)=>a+s.hours,0)/active.length) : 0;
   const alerts = active.filter(s=>s.hours>=7);
@@ -404,12 +404,13 @@ function renderDashboard() {
   document.getElementById('dist-chart').innerHTML = active.map(s=>`
     <div class="week-col">
       <div class="week-bar" style="height:${Math.round(s.hours/maxH*70)}px;background:${color(s.hours)}"></div>
-      <div class="week-lbl">${s.initials}</div>
+      <div class="week-lbl">${s.initials||s.name?.slice(0,2)}</div>
     </div>`).join('');
 }
 
-function renderStudents() {
-  const data = load();
+async function renderStudents() {
+  showLoading('students-list');
+  const data = await fetchData();
   const cls = document.getElementById('filter-class')?.value||'';
   const status = document.getElementById('filter-status')?.value||'';
   const classes = [...new Set(data.map(s=>s.cls))].sort();
@@ -427,7 +428,7 @@ function renderStudents() {
   if(status==='no-consent') filtered = filtered.filter(s=>!s.consent);
   document.getElementById('students-list').innerHTML = filtered.length ? filtered.map(s=>`
     <div class="student-row">
-      <div class="avatar">${s.initials}</div>
+      <div class="avatar">${s.initials||s.name?.slice(0,2)}</div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
           <div>
@@ -442,49 +443,49 @@ function renderStudents() {
         ${s.consent
           ? `<div class="bar-bg"><div class="bar-fill" style="width:${Math.min(100,Math.round(s.hours/12*100))}%;background:${color(s.hours)}"></div></div>`
           : `<div style="font-size:12px;color:var(--text2)">ממתין לאישור תלמיד</div>`}
+        ${s.lastSync ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">סונכרן: ${new Date(s.lastSync).toLocaleString('he-IL')}</div>` : ''}
       </div>
     </div>`).join('') : '<div style="text-align:center;padding:2rem;color:var(--text2);font-size:14px">אין תלמידים</div>';
 }
 
-function renderManage() {
-  const data = load();
+async function renderManage() {
+  const data = await fetchData();
   document.getElementById('manage-list').innerHTML = data.map(s=>`
     <div class="student-row">
-      <div class="avatar">${s.initials}</div>
+      <div class="avatar">${s.initials||s.name?.slice(0,2)}</div>
       <div style="flex:1"><div style="font-size:14px;font-weight:500">${s.name}</div>
       <div style="font-size:12px;color:var(--text2)">${s.cls} · ${s.platform} · ${s.consent?'אישר':'ממתין'}</div></div>
-      <button class="btn" style="border-color:rgba(163,45,45,0.4);color:#A32D2D;font-size:13px" onclick="removeStudent(${s.id})">הסר</button>
+      <button class="btn" style="border-color:rgba(163,45,45,0.4);color:#A32D2D;font-size:13px" onclick="removeStudent('${s.id}')">הסר</button>
     </div>`).join('');
 }
 
-function addStudent() {
+async function addStudent() {
   const name = document.getElementById('new-name').value.trim();
   const cls = document.getElementById('new-class').value.trim();
   const platform = document.getElementById('new-platform').value;
   const msg = document.getElementById('add-msg');
   if(!name||!cls){msg.style.color='#A32D2D';msg.textContent='נא למלא שם וכיתה';return;}
-  const data = load();
-  const initials = name.split(' ').map(w=>w[0]).join('').slice(0,2);
-  const id = Math.max(0,...data.map(s=>s.id))+1;
-  data.push({id,name,initials,cls,platform,hours:0,consent:false,weeklyData:[0,0,0,0,0,0,0]});
-  save(data);
-  document.getElementById('new-name').value='';
-  document.getElementById('new-class').value='';
-  msg.style.color='#3B6D11';
-  msg.textContent=`${name} נוסף! קישור הסכמה נשלח.`;
-  renderManage();
-  setTimeout(()=>{msg.textContent=''},3000);
+  try {
+    await fetch(`${SERVER}/api/students`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name,cls,platform})
+    });
+    document.getElementById('new-name').value='';
+    document.getElementById('new-class').value='';
+    msg.style.color='#3B6D11';
+    msg.textContent=`${name} נוסף בהצלחה!`;
+    renderManage();
+    setTimeout(()=>{msg.textContent=''},3000);
+  } catch(e) {
+    msg.style.color='#A32D2D';
+    msg.textContent='שגיאה בהוספת תלמיד';
+  }
 }
 
-function removeStudent(id) {
-  save(load().filter(s=>s.id!==id));
+async function removeStudent(id) {
+  await fetch(`${SERVER}/api/students/${id}`, {method:'DELETE'});
   renderManage();
-}
-
-function resetData() {
-  save(JSON.parse(JSON.stringify(DEMO)));
-  renderManage();
-  renderDashboard();
 }
 
 // PWA install prompt
@@ -502,7 +503,9 @@ document.getElementById('install-btn')?.addEventListener('click', async ()=>{
   deferredPrompt = null;
 });
 
+// רענון אוטומטי כל דקה
 renderDashboard();
+setInterval(renderDashboard, 60000);
 </script>
 </body>
 </html>
