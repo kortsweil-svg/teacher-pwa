@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>מעקב זמן מסך — מורה</title>
+  <meta name="description" content="דשבורד מעקב זמן מסך לתלמידים" />
+
+  <!-- PWA manifest -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#ffffff" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #ffffff;
+      --bg2: #f5f5f3;
+      --bg3: #eeede8;
+      --text: #1a1a18;
+      --text2: #6b6b67;
+      --border: rgba(0,0,0,0.12);
+      --border2: rgba(0,0,0,0.22);
+      --green: #3B6D11;
+      --green-bg: #EAF3DE;
+      --amber: #854F0B;
+      --amber-bg: #FAEEDA;
+      --red: #A32D2D;
+      --red-bg: #FCEBEB;
+      --radius: 8px;
+      --radius-lg: 12px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1a1a18;
+        --bg2: #242420;
+        --bg3: #2c2c2a;
+        --text: #f0efe8;
+        --text2: #9a9a94;
+        --border: rgba(255,255,255,0.12);
+        --border2: rgba(255,255,255,0.22);
+        --green-bg: #173404;
+        --amber-bg: #412402;
+        --red-bg: #501313;
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg3);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--bg);
+      border-bottom: 0.5px solid var(--border);
+      padding: 0 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .logo { font-size: 16px; font-weight: 500; }
+    .logo span { font-size: 13px; color: var(--text2); font-weight: 400; margin-right: 8px; }
+
+    nav {
+      display: flex;
+      gap: 4px;
+    }
+
+    .nav-btn {
+      padding: 6px 14px;
+      border-radius: var(--radius);
+      border: none;
+      background: transparent;
+      font-size: 14px;
+      cursor: pointer;
+      color: var(--text2);
+      font-family: inherit;
+    }
+
+    .nav-btn.active {
+      background: var(--bg2);
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    main { max-width: 900px; margin: 0 auto; padding: 1.5rem; }
+
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0,1fr));
+      gap: 10px;
+      margin-bottom: 1.25rem;
+    }
+
+    .metric {
+      background: var(--bg2);
+      border-radius: var(--radius);
+      padding: 0.75rem 1rem;
+    }
+
+    .metric-label { font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+    .metric-val { font-size: 24px; font-weight: 500; }
+
+    .card {
+      background: var(--bg);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .card-title { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+    .card-sub { font-size: 13px; color: var(--text2); margin-bottom: 1rem; }
+
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: var(--radius);
+      font-weight: 500;
+    }
+
+    .badge-green { background: var(--green-bg); color: var(--green); }
+    .badge-amber { background: var(--amber-bg); color: var(--amber); }
+    .badge-red { background: var(--red-bg); color: var(--red); }
+    .badge-gray { background: var(--bg2); color: var(--text2); }
+
+    .student-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 0.5px solid var(--border);
+    }
+    .student-row:last-child { border-bottom: none; }
+
+    .avatar {
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      background: #E6F1FB;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 500; color: #185FA5;
+      flex-shrink: 0;
+    }
+
+    .bar-bg {
+      height: 6px;
+      background: var(--bg2);
+      border-radius: 3px;
+      overflow: hidden;
+      flex: 1;
+    }
+    .bar-fill { height: 100%; border-radius: 3px; }
+
+    .alert-box {
+      background: var(--amber-bg);
+      border: 0.5px solid rgba(133,79,11,0.3);
+      border-radius: var(--radius);
+      padding: 0.75rem 1rem;
+      font-size: 13px;
+      color: var(--amber);
+      margin-bottom: 0.75rem;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      border-radius: var(--radius);
+      border: 0.5px solid var(--border2);
+      background: var(--bg);
+      font-size: 14px;
+      cursor: pointer;
+      color: var(--text);
+      font-family: inherit;
+    }
+    .btn:hover { background: var(--bg2); }
+    .btn-primary {
+      background: var(--text);
+      color: var(--bg);
+      border-color: transparent;
+    }
+    .btn-primary:hover { opacity: 0.85; background: var(--text); }
+
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    select, input[type=text] {
+      padding: 7px 10px;
+      border: 0.5px solid var(--border2);
+      border-radius: var(--radius);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .week-chart {
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+      height: 90px;
+      margin-top: 0.75rem;
+    }
+    .week-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1;
+      gap: 4px;
+    }
+    .week-bar {
+      width: 100%;
+      border-radius: 3px 3px 0 0;
+      min-height: 2px;
+    }
+    .week-lbl { font-size: 11px; color: var(--text2); }
+
+    .form-group { margin-bottom: 1rem; }
+    .form-label { font-size: 13px; color: var(--text2); margin-bottom: 6px; display: block; }
+    input[type=number] {
+      padding: 7px 10px;
+      border: 0.5px solid var(--border2);
+      border-radius: var(--radius);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      width: 100%;
+    }
+
+    .install-banner {
+      background: #E6F1FB;
+      border: 0.5px solid #B5D4F4;
+      border-radius: var(--radius);
+      padding: 0.75rem 1rem;
+      font-size: 13px;
+      color: #185FA5;
+      margin-bottom: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    @media (max-width: 600px) {
+      .metric-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      header { padding: 0 1rem; }
+      main { padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">מעקב זמן מסך <span>מורה / מנהל</span></div>
+  <nav>
+    <button class="nav-btn active" onclick="showScreen('dashboard')">דשבורד</button>
+    <button class="nav-btn" onclick="showScreen('students')">תלמידים</button>
+    <button class="nav-btn" onclick="showScreen('add')">הוסף</button>
+  </nav>
+</header>
+
+<main>
+  <div id="install-banner" class="install-banner" style="display:none">
+    התקן את האפליקציה על מסך הבית לגישה מהירה
+    <button class="btn btn-primary" id="install-btn" style="white-space:nowrap">התקן</button>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="screen-dashboard" class="screen active">
+    <div class="metric-grid" id="dash-metrics"></div>
+    <div id="dash-alerts"></div>
+    <div class="card">
+      <div class="card-title">התפלגות זמן מסך</div>
+      <div class="card-sub">כל התלמידים — שבוע נוכחי</div>
+      <div class="week-chart" id="dist-chart"></div>
+    </div>
+  </div>
+
+  <!-- Students list -->
+  <div id="screen-students" class="screen">
+    <div class="card">
+      <div class="toolbar">
+        <div class="card-title" style="margin-bottom:0">כל התלמידים</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <select id="filter-class" onchange="renderStudents()">
+            <option value="">כל הכיתות</option>
+          </select>
+          <select id="filter-status" onchange="renderStudents()">
+            <option value="">כל הסטטוסים</option>
+            <option value="high">גבוה (7+ש')</option>
+            <option value="medium">מתון (3-7ש')</option>
+            <option value="low">תקין (עד 3ש')</option>
+            <option value="no-consent">ללא הסכמה</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:1rem" id="students-list"></div>
+    </div>
+  </div>
+
+  <!-- Add student -->
+  <div id="screen-add" class="screen">
+    <div class="card">
+      <div class="card-title">הוסף תלמיד חדש</div>
+      <div class="card-sub">לאחר ההוספה יישלח קישור הסכמה לתלמיד</div>
+      <div class="form-group">
+        <label class="form-label">שם מלא</label>
+        <input type="text" id="new-name" placeholder="דניאל כהן" style="width:100%">
+      </div>
+      <div class="form-group">
+        <label class="form-label">כיתה</label>
+        <input type="text" id="new-class" placeholder="ט׳2" style="width:100%">
+      </div>
+      <div class="form-group">
+        <label class="form-label">פלטפורמה</label>
+        <select id="new-platform" style="width:100%">
+          <option value="iOS">iOS (iPhone)</option>
+          <option value="Android">Android</option>
+          <option value="שניהם">שניהם</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="addStudent()">הוסף תלמיד</button>
+        <button class="btn" onclick="showScreen('students')">ביטול</button>
+      </div>
+      <div id="add-msg" style="margin-top:0.75rem;font-size:13px"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">ניהול תלמידים</div>
+      <div id="manage-list"></div>
+      <button class="btn" style="margin-top:1rem" onclick="resetData()">אפס לנתוני דמו</button>
+    </div>
+  </div>
+</main>
+
+<script>
+const KEY = 'screentime_teacher_v1';
+
+const DEMO = [
+  {id:1,name:"דניאל כהן",initials:"דכ",cls:"ט׳2",platform:"iOS",hours:4.2,consent:true,weeklyData:[3.8,4.5,4.1,5.2,4.0,3.5,4.2]},
+  {id:2,name:"נועה לוי",initials:"נל",cls:"ט׳2",platform:"Android",hours:2.8,consent:true,weeklyData:[2.2,3.1,2.9,2.5,3.0,2.8,2.7]},
+  {id:3,name:"יוסף אזולאי",initials:"יא",cls:"ט׳2",platform:"iOS",hours:8.7,consent:true,weeklyData:[7.5,9.1,8.8,9.2,8.5,7.9,8.7]},
+  {id:4,name:"שירה מזרחי",initials:"שמ",cls:"י׳1",platform:"Android",hours:6.1,consent:true,weeklyData:[5.5,6.3,6.0,6.8,5.9,6.2,6.1]},
+  {id:5,name:"איתי ברק",initials:"אב",cls:"י׳1",platform:"iOS",hours:1.9,consent:true,weeklyData:[2.1,1.8,1.5,2.0,2.2,1.7,1.9]},
+  {id:6,name:"מאיה פרץ",initials:"מפ",cls:"ט׳2",platform:"iOS",hours:9.2,consent:true,weeklyData:[8.8,9.5,9.0,10.1,9.3,8.7,9.2]},
+  {id:7,name:"רון גולדברג",initials:"רג",cls:"י׳1",platform:"Android",hours:3.4,consent:false,weeklyData:[3.2,3.5,3.3,3.6,3.4,3.1,3.4]},
+  {id:8,name:"ליאת שפירא",initials:"לש",cls:"ט׳2",platform:"iOS",hours:5.5,consent:true,weeklyData:[5.0,5.8,5.3,6.0,5.4,5.2,5.5]}
+];
+
+function load() {
+  try { const d = localStorage.getItem(KEY); if(d) return JSON.parse(d); } catch(e){}
+  return JSON.parse(JSON.stringify(DEMO));
+}
+function save(d) { try { localStorage.setItem(KEY, JSON.stringify(d)); } catch(e){} }
+
+function color(h) { return h<3?'#3B6D11':h<6?'#854F0B':'#A32D2D'; }
+function badge(h,consent) {
+  if(!consent) return '<span class="badge badge-gray">ללא הסכמה</span>';
+  if(h<3) return '<span class="badge badge-green">תקין</span>';
+  if(h<6) return '<span class="badge badge-amber">מתון</span>';
+  return '<span class="badge badge-red">גבוה</span>';
+}
+
+function showScreen(s) {
+  document.querySelectorAll('.screen').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach((b,i)=>b.classList.toggle('active',['dashboard','students','add'][i]===s));
+  document.getElementById('screen-'+s).classList.add('active');
+  if(s==='dashboard') renderDashboard();
+  if(s==='students') renderStudents();
+  if(s==='add') renderManage();
+}
+
+function renderDashboard() {
+  const data = load();
+  const active = data.filter(s=>s.consent);
+  const avg = active.length ? (active.reduce((a,s)=>a+s.hours,0)/active.length) : 0;
+  const alerts = active.filter(s=>s.hours>=7);
+  document.getElementById('dash-metrics').innerHTML = `
+    <div class="metric"><div class="metric-label">תלמידים פעילים</div><div class="metric-val">${active.length}</div></div>
+    <div class="metric"><div class="metric-label">ממוצע יומי</div><div class="metric-val">${avg.toFixed(1)}ש'</div></div>
+    <div class="metric"><div class="metric-label">דורשים תשומת לב</div><div class="metric-val" style="color:var(--red)">${alerts.length}</div></div>
+  `;
+  document.getElementById('dash-alerts').innerHTML = alerts.map(s=>`
+    <div class="alert-box"><strong>${s.name}</strong> — ${s.hours.toFixed(1)} שעות מסך ביום</div>`).join('');
+  const maxH = Math.max(...active.map(s=>s.hours),1);
+  document.getElementById('dist-chart').innerHTML = active.map(s=>`
+    <div class="week-col">
+      <div class="week-bar" style="height:${Math.round(s.hours/maxH*70)}px;background:${color(s.hours)}"></div>
+      <div class="week-lbl">${s.initials}</div>
+    </div>`).join('');
+}
+
+function renderStudents() {
+  const data = load();
+  const cls = document.getElementById('filter-class')?.value||'';
+  const status = document.getElementById('filter-status')?.value||'';
+  const classes = [...new Set(data.map(s=>s.cls))].sort();
+  const sel = document.getElementById('filter-class');
+  if(sel) {
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">כל הכיתות</option>'+classes.map(c=>`<option value="${c}">${c}</option>`).join('');
+    sel.value = cur;
+  }
+  let filtered = data;
+  if(cls) filtered = filtered.filter(s=>s.cls===cls);
+  if(status==='high') filtered = filtered.filter(s=>s.consent&&s.hours>=7);
+  if(status==='medium') filtered = filtered.filter(s=>s.consent&&s.hours>=3&&s.hours<7);
+  if(status==='low') filtered = filtered.filter(s=>s.consent&&s.hours<3);
+  if(status==='no-consent') filtered = filtered.filter(s=>!s.consent);
+  document.getElementById('students-list').innerHTML = filtered.length ? filtered.map(s=>`
+    <div class="student-row">
+      <div class="avatar">${s.initials}</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div>
+            <span style="font-size:14px;font-weight:500">${s.name}</span>
+            <span style="font-size:11px;color:var(--text2);margin-right:6px">${s.cls} · ${s.platform}</span>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center">
+            ${badge(s.hours,s.consent)}
+            <span style="font-size:13px;font-weight:500">${s.consent?s.hours.toFixed(1)+'ש\'':'—'}</span>
+          </div>
+        </div>
+        ${s.consent
+          ? `<div class="bar-bg"><div class="bar-fill" style="width:${Math.min(100,Math.round(s.hours/12*100))}%;background:${color(s.hours)}"></div></div>`
+          : `<div style="font-size:12px;color:var(--text2)">ממתין לאישור תלמיד</div>`}
+      </div>
+    </div>`).join('') : '<div style="text-align:center;padding:2rem;color:var(--text2);font-size:14px">אין תלמידים</div>';
+}
+
+function renderManage() {
+  const data = load();
+  document.getElementById('manage-list').innerHTML = data.map(s=>`
+    <div class="student-row">
+      <div class="avatar">${s.initials}</div>
+      <div style="flex:1"><div style="font-size:14px;font-weight:500">${s.name}</div>
+      <div style="font-size:12px;color:var(--text2)">${s.cls} · ${s.platform} · ${s.consent?'אישר':'ממתין'}</div></div>
+      <button class="btn" style="border-color:rgba(163,45,45,0.4);color:#A32D2D;font-size:13px" onclick="removeStudent(${s.id})">הסר</button>
+    </div>`).join('');
+}
+
+function addStudent() {
+  const name = document.getElementById('new-name').value.trim();
+  const cls = document.getElementById('new-class').value.trim();
+  const platform = document.getElementById('new-platform').value;
+  const msg = document.getElementById('add-msg');
+  if(!name||!cls){msg.style.color='#A32D2D';msg.textContent='נא למלא שם וכיתה';return;}
+  const data = load();
+  const initials = name.split(' ').map(w=>w[0]).join('').slice(0,2);
+  const id = Math.max(0,...data.map(s=>s.id))+1;
+  data.push({id,name,initials,cls,platform,hours:0,consent:false,weeklyData:[0,0,0,0,0,0,0]});
+  save(data);
+  document.getElementById('new-name').value='';
+  document.getElementById('new-class').value='';
+  msg.style.color='#3B6D11';
+  msg.textContent=`${name} נוסף! קישור הסכמה נשלח.`;
+  renderManage();
+  setTimeout(()=>{msg.textContent=''},3000);
+}
+
+function removeStudent(id) {
+  save(load().filter(s=>s.id!==id));
+  renderManage();
+}
+
+function resetData() {
+  save(JSON.parse(JSON.stringify(DEMO)));
+  renderManage();
+  renderDashboard();
+}
+
+// PWA install prompt
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', e=>{
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('install-banner').style.display='flex';
+});
+document.getElementById('install-btn')?.addEventListener('click', async ()=>{
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const {outcome} = await deferredPrompt.userChoice;
+  if(outcome==='accepted') document.getElementById('install-banner').style.display='none';
+  deferredPrompt = null;
+});
+
+renderDashboard();
+</script>
+</body>
+</html>
