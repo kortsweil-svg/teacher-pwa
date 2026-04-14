@@ -1,387 +1,209 @@
-<!DOCTYPE html>
-<html lang="he" dir="rtl">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>מעקב זמן מסך — מורה</title>
-  <link rel="manifest" href="manifest.json"/>
-  <style>
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    :root{--bg:#fff;--bg2:#f5f5f3;--bg3:#eeede8;--text:#1a1a18;--text2:#6b6b67;--border:rgba(0,0,0,0.12);--border2:rgba(0,0,0,0.22);--green:#3B6D11;--green-bg:#EAF3DE;--amber:#854F0B;--amber-bg:#FAEEDA;--red:#A32D2D;--red-bg:#FCEBEB;--blue:#185FA5;--blue-bg:#E6F1FB;--r:8px;--rl:12px}
-    @media(prefers-color-scheme:dark){:root{--bg:#1a1a18;--bg2:#242420;--bg3:#2c2c2a;--text:#f0efe8;--text2:#9a9a94;--border:rgba(255,255,255,0.12);--border2:rgba(255,255,255,0.22);--green-bg:#173404;--amber-bg:#412402;--red-bg:#501313;--blue-bg:#042C53}}
-    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg3);color:var(--text);min-height:100vh}
-    header{background:var(--bg);border-bottom:0.5px solid var(--border);padding:0 1.5rem;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:10}
-    .logo{font-size:16px;font-weight:500}
-    .logo span{font-size:13px;color:var(--text2);font-weight:400;margin-right:8px}
-    nav{display:flex;gap:4px}
-    .nav-btn{padding:6px 14px;border-radius:var(--r);border:none;background:transparent;font-size:14px;cursor:pointer;color:var(--text2);font-family:inherit}
-    .nav-btn.active{background:var(--bg2);color:var(--text);font-weight:500}
-    main{max-width:900px;margin:0 auto;padding:1.5rem}
-    .screen{display:none}.screen.active{display:block}
-    .metric-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:1.25rem}
-    .metric{background:var(--bg2);border-radius:var(--r);padding:.75rem 1rem}
-    .metric-label{font-size:12px;color:var(--text2);margin-bottom:4px}
-    .metric-val{font-size:24px;font-weight:500}
-    .card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--rl);padding:1.25rem;margin-bottom:1rem}
-    .card-title{font-size:15px;font-weight:500;margin-bottom:4px}
-    .card-sub{font-size:13px;color:var(--text2);margin-bottom:1rem}
-    .badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:var(--r);font-weight:500}
-    .badge-green{background:var(--green-bg);color:var(--green)}
-    .badge-amber{background:var(--amber-bg);color:var(--amber)}
-    .badge-red{background:var(--red-bg);color:var(--red)}
-    .badge-gray{background:var(--bg2);color:var(--text2)}
-    .badge-blue{background:var(--blue-bg);color:var(--blue)}
-    .student-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:0.5px solid var(--border)}
-    .student-row:last-child{border-bottom:none}
-    .avatar{width:38px;height:38px;border-radius:50%;background:var(--blue-bg);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:var(--blue);flex-shrink:0}
-    .bar-bg{height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;flex:1}
-    .bar-fill{height:100%;border-radius:3px}
-    .alert-box{background:var(--amber-bg);border:0.5px solid rgba(133,79,11,0.3);border-radius:var(--r);padding:.75rem 1rem;font-size:13px;color:var(--amber);margin-bottom:.75rem}
-    .btn{padding:8px 16px;border-radius:var(--r);border:0.5px solid var(--border2);background:var(--bg);font-size:14px;cursor:pointer;color:var(--text);font-family:inherit}
-    .btn:hover{background:var(--bg2)}
-    .btn-primary{background:var(--text);color:var(--bg);border-color:transparent}
-    .btn-primary:hover{opacity:.85;background:var(--text)}
-    .btn-danger{border-color:rgba(163,45,45,0.4);color:var(--red)}
-    .btn-danger:hover{background:var(--red-bg)}
-    .btn-blue{background:var(--blue);color:#fff;border-color:transparent}
-    .btn-blue:hover{opacity:.85}
-    select,input[type=text],input[type=password]{padding:7px 10px;border:0.5px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:14px;font-family:inherit}
-    .form-group{margin-bottom:1rem}
-    .form-label{font-size:13px;color:var(--text2);margin-bottom:6px;display:block}
-    .week-chart{display:flex;align-items:flex-end;gap:6px;height:90px;margin-top:.75rem}
-    .week-col{display:flex;flex-direction:column;align-items:center;flex:1;gap:4px}
-    .week-bar{width:100%;border-radius:3px 3px 0 0;min-height:2px}
-    .week-lbl{font-size:11px;color:var(--text2)}
-    .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:8px;flex-wrap:wrap}
-    /* Auth */
-    .auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem}
-    .auth-card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--rl);padding:2rem;width:100%;max-width:380px}
-    .auth-title{font-size:20px;font-weight:500;margin-bottom:6px;text-align:center}
-    .auth-sub{font-size:13px;color:var(--text2);margin-bottom:1.5rem;text-align:center}
-    .auth-input{width:100%;padding:10px 12px;border:0.5px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:15px;font-family:inherit;margin-bottom:.75rem}
-    .auth-btn{width:100%;padding:12px;border-radius:var(--r);border:none;background:var(--text);color:var(--bg);font-size:15px;font-weight:500;cursor:pointer;font-family:inherit;margin-bottom:.75rem}
-    .auth-btn:hover{opacity:.85}
-    .auth-toggle{font-size:13px;color:var(--text2);text-align:center}
-    .auth-toggle a{color:var(--blue);cursor:pointer}
-    .auth-error{background:var(--red-bg);color:var(--red);border-radius:var(--r);padding:.5rem .75rem;font-size:13px;margin-bottom:.75rem;display:none}
-    /* Invite modal */
-    .modal-overlay{min-height:300px;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;padding:1rem;border-radius:var(--rl);margin-bottom:1rem}
-    .modal{background:var(--bg);border-radius:var(--rl);padding:1.5rem;width:100%;max-width:420px}
-    .invite-link{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--r);padding:.75rem 1rem;font-size:13px;word-break:break-all;margin:1rem 0;color:var(--blue)}
-    @media(max-width:600px){.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))};header{padding:0 1rem};main{padding:1rem}}
-  </style>
-</head>
-<body>
+const express = require('express');
+const cors = require('cors');
+const crypto = require('crypto');
+const app = express();
 
-<div id="auth-screen" class="auth-wrap">
-  <div class="auth-card">
-    <div id="auth-title" class="auth-title">כניסה למורה</div>
-    <div id="auth-sub" class="auth-sub">הזן את פרטי הכניסה שלך</div>
-    <div id="auth-error" class="auth-error"></div>
-    <div id="reg-name-wrap" style="display:none">
-      <input class="auth-input" type="text" id="auth-fullname" placeholder="שם מלא"/>
-    </div>
-    <input class="auth-input" type="text" id="auth-username" placeholder="שם משתמש"/>
-    <input class="auth-input" type="password" id="auth-password" placeholder="סיסמה"/>
-    <button class="auth-btn" id="auth-submit" onclick="submitAuth()">כניסה</button>
-    <div class="auth-toggle">
-      <span id="auth-toggle-txt">אין לך חשבון?</span>
-      <a onclick="toggleMode()"> הירשם כאן</a>
-    </div>
-  </div>
-</div>
+app.use(cors());
+app.use(express.json());
 
-<div id="app-screen" style="display:none">
-  <header>
-    <div class="logo">מעקב זמן מסך <span id="teacher-header"></span></div>
-    <nav>
-      <button class="nav-btn active" onclick="showScreen('dashboard')">דשבורד</button>
-      <button class="nav-btn" onclick="showScreen('students')">תלמידים</button>
-      <button class="nav-btn" onclick="showScreen('manage')">ניהול</button>
-      <button class="nav-btn" onclick="logout()" style="color:var(--red)">יציאה</button>
-    </nav>
-  </header>
-  <main>
-    <div id="screen-dashboard" class="screen active">
-      <div class="metric-grid" id="dash-metrics"></div>
-      <div id="dash-alerts"></div>
-      <div class="card">
-        <div class="card-title">התפלגות זמן מסך</div>
-        <div class="card-sub">כל התלמידים — שבוע נוכחי</div>
-        <div class="week-chart" id="dist-chart"></div>
-      </div>
-    </div>
+let teachers = {};
+let classes = {};
+let students = {};
+let reports = {};
+let sessions = {};
+let invites = {};  // { token: { studentId, used } }
 
-    <div id="screen-students" class="screen">
-      <div class="card">
-        <div class="toolbar">
-          <div class="card-title" style="margin-bottom:0">תלמידים</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <select id="filter-class" onchange="renderStudents()"><option value="">כל הכיתות</option></select>
-            <select id="filter-status" onchange="renderStudents()">
-              <option value="">כל הסטטוסים</option>
-              <option value="high">גבוה (7+ש')</option>
-              <option value="medium">מתון (3-7ש')</option>
-              <option value="low">תקין (עד 3ש')</option>
-              <option value="pending">ממתין להצטרפות</option>
-              <option value="no-consent">ללא הסכמה</option>
-            </select>
-          </div>
-        </div>
-        <div style="margin-top:1rem" id="students-list"></div>
-      </div>
-    </div>
+function hash(p) { return crypto.createHash('sha256').update(p+'st_salt').digest('hex'); }
+function token() { return crypto.randomBytes(32).toString('hex'); }
+function id() { return crypto.randomBytes(8).toString('hex'); }
 
-    <div id="screen-manage" class="screen">
-      <div id="invite-modal-wrap"></div>
-      <div class="card">
-        <div class="card-title">כיתות</div>
-        <div style="display:flex;gap:8px;margin-bottom:1rem">
-          <input type="text" id="new-class-name" placeholder="שם כיתה (למשל ט׳2)" style="flex:1">
-          <button class="btn btn-primary" onclick="addClass()">הוסף כיתה</button>
-        </div>
-        <div id="classes-list"></div>
-      </div>
-      <div class="card">
-        <div class="card-title">הוסף תלמיד</div>
-        <div class="card-sub">לאחר ההוספה תקבל קישור לשלוח לתלמיד</div>
-        <div class="form-group">
-          <label class="form-label">שם מלא</label>
-          <input type="text" id="new-name" placeholder="דניאל כהן" style="width:100%">
-        </div>
-        <div class="form-group">
-          <label class="form-label">כיתה</label>
-          <select id="new-class" style="width:100%"><option value="">בחר כיתה</option></select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">פלטפורמה</label>
-          <select id="new-platform" style="width:100%">
-            <option value="iOS">iOS (iPhone)</option>
-            <option value="Android">Android</option>
-          </select>
-        </div>
-        <button class="btn btn-primary" onclick="addStudent()">הוסף תלמיד וקבל קישור</button>
-        <div id="add-msg" style="margin-top:.75rem;font-size:13px"></div>
-      </div>
-    </div>
-  </main>
-</div>
-
-<script>
-const SERVER='https://screentime-server.onrender.com';
-let token=localStorage.getItem('teacher_token');
-let teacherName=localStorage.getItem('teacher_name')||'';
-let isReg=false;
-
-const api=(path,method='GET',body=null)=>fetch(SERVER+path,{
-  method,headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
-  body:body?JSON.stringify(body):null
-}).then(r=>r.json());
-
-function color(h){return h<3?'#3B6D11':h<6?'#854F0B':'#A32D2D'}
-function badge(h,consent,active){
-  if(!active) return '<span class="badge badge-blue">ממתין להצטרפות</span>';
-  if(!consent) return '<span class="badge badge-gray">ללא הסכמה</span>';
-  if(h<3) return '<span class="badge badge-green">תקין</span>';
-  if(h<6) return '<span class="badge badge-amber">מתון</span>';
-  return '<span class="badge badge-red">גבוה</span>';
+function auth(req,res,next){
+  const t=req.headers['authorization']?.replace('Bearer ','');
+  if(!t||!sessions[t]) return res.status(401).json({error:'לא מחובר'});
+  req.session=sessions[t]; next();
+}
+function teacherOnly(req,res,next){
+  if(req.session.role!=='teacher') return res.status(403).json({error:'הרשאה נדרשת'});
+  next();
 }
 
-function showError(msg){const e=document.getElementById('auth-error');e.textContent=msg;e.style.display='block'}
+app.get('/',(req,res)=>res.json({status:'ok'}));
 
-function toggleMode(){
-  isReg=!isReg;
-  document.getElementById('auth-title').textContent=isReg?'הרשמה':'כניסה למורה';
-  document.getElementById('auth-sub').textContent=isReg?'צור חשבון מורה חדש':'הזן את פרטי הכניסה שלך';
-  document.getElementById('auth-submit').textContent=isReg?'הרשמה':'כניסה';
-  document.getElementById('auth-toggle-txt').textContent=isReg?'כבר יש לך חשבון?':'אין לך חשבון?';
-  document.querySelector('#auth-screen .auth-toggle a').textContent=isReg?' התחבר כאן':' הירשם כאן';
-  document.getElementById('reg-name-wrap').style.display=isReg?'block':'none';
-  document.getElementById('auth-error').style.display='none';
-}
+// ─── מורה: רישום והתחברות ─────────────────────────────────────────────────────
+app.post('/api/teacher/register',(req,res)=>{
+  const{username,password,name}=req.body;
+  if(!username||!password||!name) return res.status(400).json({error:'חסרים פרטים'});
+  if(Object.values(teachers).find(t=>t.username===username))
+    return res.status(400).json({error:'שם משתמש תפוס'});
+  const tid=id();
+  teachers[tid]={id:tid,username,passwordHash:hash(password),name};
+  const tok=token();
+  sessions[tok]={userId:tid,role:'teacher',teacherId:tid};
+  res.json({ok:true,token:tok,teacher:{id:tid,username,name}});
+});
 
-async function submitAuth(){
-  const username=document.getElementById('auth-username').value.trim();
-  const password=document.getElementById('auth-password').value;
-  if(!username||!password){showError('נא למלא שם משתמש וסיסמה');return}
-  const btn=document.getElementById('auth-submit');
-  btn.textContent='...';btn.disabled=true;
-  try{
-    let data;
-    if(isReg){
-      const name=document.getElementById('auth-fullname').value.trim();
-      if(!name){showError('נא למלא שם מלא');btn.textContent='הרשמה';btn.disabled=false;return}
-      data=await api('/api/teacher/register','POST',{username,password,name});
-    } else {
-      data=await api('/api/teacher/login','POST',{username,password});
+app.post('/api/teacher/login',(req,res)=>{
+  const{username,password}=req.body;
+  const t=Object.values(teachers).find(t=>t.username===username);
+  if(!t||t.passwordHash!==hash(password))
+    return res.status(401).json({error:'שם משתמש או סיסמה שגויים'});
+  const tok=token();
+  sessions[tok]={userId:t.id,role:'teacher',teacherId:t.id};
+  res.json({ok:true,token:tok,teacher:{id:t.id,username:t.username,name:t.name}});
+});
+
+// ─── כיתות ───────────────────────────────────────────────────────────────────
+app.post('/api/classes',auth,teacherOnly,(req,res)=>{
+  const{name}=req.body;
+  if(!name) return res.status(400).json({error:'נדרש שם'});
+  const cid=id();
+  classes[cid]={id:cid,name,teacherId:req.session.teacherId};
+  res.json({ok:true,class:classes[cid]});
+});
+app.get('/api/classes',auth,teacherOnly,(req,res)=>{
+  res.json(Object.values(classes).filter(c=>c.teacherId===req.session.teacherId));
+});
+app.delete('/api/classes/:id',auth,teacherOnly,(req,res)=>{
+  const c=classes[req.params.id];
+  if(!c||c.teacherId!==req.session.teacherId) return res.status(403).json({error:'אין הרשאה'});
+  delete classes[req.params.id]; res.json({ok:true});
+});
+
+// ─── תלמידים ─────────────────────────────────────────────────────────────────
+
+// מורה מוסיף תלמיד — מקבל חזרה קישור הצטרפות
+app.post('/api/students',auth,teacherOnly,(req,res)=>{
+  const{name,classId,platform}=req.body;
+  if(!name||!classId) return res.status(400).json({error:'חסרים פרטים'});
+  const cls=classes[classId];
+  if(!cls||cls.teacherId!==req.session.teacherId)
+    return res.status(403).json({error:'כיתה לא נמצאה'});
+  const sid=id();
+  const initials=name.split(' ').map(w=>w[0]).join('').slice(0,2);
+  students[sid]={
+    id:sid,name,initials,classId,teacherId:req.session.teacherId,
+    platform:platform||'iOS',consent:false,
+    username:null,passwordHash:null,active:false
+  };
+  // קישור הצטרפות חד-פעמי
+  const inviteToken=token();
+  invites[inviteToken]={studentId:sid,used:false,createdAt:new Date().toISOString()};
+  const joinUrl=`https://screentime-server.onrender.com/join/${inviteToken}`;
+  res.json({ok:true,student:{id:sid,name,classId},joinUrl});
+});
+
+app.get('/api/students',auth,teacherOnly,(req,res)=>{
+  const mine=Object.values(students)
+    .filter(s=>s.teacherId===req.session.teacherId)
+    .map(s=>({
+      id:s.id,name:s.name,initials:s.initials,
+      classId:s.classId,className:classes[s.classId]?.name||'',
+      platform:s.platform,consent:s.consent,active:s.active,
+      hours:reports[s.id]?.dailyAverage??0,
+      weeklyData:reports[s.id]?.weeklyData??[0,0,0,0,0,0,0],
+      lastSync:reports[s.id]?.syncedAt??null,
+    }));
+  res.json(mine);
+});
+
+app.delete('/api/students/:id',auth,teacherOnly,(req,res)=>{
+  const s=students[req.params.id];
+  if(!s||s.teacherId!==req.session.teacherId) return res.status(403).json({error:'אין הרשאה'});
+  delete students[req.params.id]; delete reports[req.params.id];
+  res.json({ok:true});
+});
+
+// ─── קישור הצטרפות ───────────────────────────────────────────────────────────
+
+// בדיקת תוקף קישור
+app.get('/api/join/:inviteToken',(req,res)=>{
+  const invite=invites[req.params.inviteToken];
+  if(!invite||invite.used) return res.status(404).json({error:'קישור לא תקף או שכבר נוצל'});
+  const student=students[invite.studentId];
+  if(!student) return res.status(404).json({error:'תלמיד לא נמצא'});
+  const teacher=teachers[student.teacherId];
+  res.json({
+    ok:true,
+    studentName:student.name,
+    className:classes[student.classId]?.name||'',
+    teacherName:teacher?.name||'',
+  });
+});
+
+// תלמיד מגדיר שם משתמש וסיסמה
+app.post('/api/join/:inviteToken',(req,res)=>{
+  const invite=invites[req.params.inviteToken];
+  if(!invite||invite.used) return res.status(404).json({error:'קישור לא תקף'});
+  const{username,password}=req.body;
+  if(!username||!password) return res.status(400).json({error:'חסרים פרטים'});
+  if(Object.values(students).find(s=>s.username===username))
+    return res.status(400).json({error:'שם המשתמש תפוס'});
+  const student=students[invite.studentId];
+  student.username=username;
+  student.passwordHash=hash(password);
+  student.active=true;
+  invite.used=true;
+  const tok=token();
+  sessions[tok]={userId:student.id,role:'student',teacherId:student.teacherId};
+  const teacher=teachers[student.teacherId];
+  res.json({
+    ok:true,token:tok,
+    student:{
+      id:student.id,name:student.name,
+      className:classes[student.classId]?.name||'',
+      teacherName:teacher?.name||'',
+      platform:student.platform,consent:student.consent,
     }
-    if(!data.ok){showError(data.error||'שגיאה');btn.textContent=isReg?'הרשמה':'כניסה';btn.disabled=false;return}
-    token=data.token; teacherName=data.teacher.name;
-    localStorage.setItem('teacher_token',token);
-    localStorage.setItem('teacher_name',teacherName);
-    enterApp();
-  }catch(e){showError('לא ניתן להתחבר לשרת');btn.textContent=isReg?'הרשמה':'כניסה';btn.disabled=false}
-}
+  });
+});
 
-function enterApp(){
-  document.getElementById('auth-screen').style.display='none';
-  document.getElementById('app-screen').style.display='block';
-  document.getElementById('teacher-header').textContent=teacherName;
-  renderDashboard();
-}
+// ─── תלמיד: התחברות ───────────────────────────────────────────────────────────
+app.post('/api/student/login',(req,res)=>{
+  const{username,password}=req.body;
+  const s=Object.values(students).find(s=>s.username===username);
+  if(!s||s.passwordHash!==hash(password))
+    return res.status(401).json({error:'שם משתמש או סיסמה שגויים'});
+  const tok=token();
+  sessions[tok]={userId:s.id,role:'student',teacherId:s.teacherId};
+  const teacher=teachers[s.teacherId];
+  res.json({
+    ok:true,token:tok,
+    student:{
+      id:s.id,name:s.name,
+      className:classes[s.classId]?.name||'',
+      teacherName:teacher?.name||'',
+      platform:s.platform,consent:s.consent,
+    }
+  });
+});
 
-function logout(){
-  localStorage.removeItem('teacher_token');localStorage.removeItem('teacher_name');
-  token=null;
-  document.getElementById('auth-screen').style.display='flex';
-  document.getElementById('app-screen').style.display='none';
-}
+// ─── דוחות ───────────────────────────────────────────────────────────────────
+app.post('/api/report',auth,(req,res)=>{
+  if(req.session.role!=='student') return res.status(403).json({error:'אין הרשאה'});
+  const sid=req.session.userId;
+  const{dailyAverage,totalMinutes,weeklyData,consent,platform,syncedAt}=req.body;
+  if(students[sid]&&consent) students[sid].consent=consent.total||false;
+  reports[sid]={
+    studentId:sid,dailyAverage:dailyAverage??0,totalMinutes:totalMinutes??0,
+    weeklyData:weeklyData??[0,0,0,0,0,0,0],
+    consent:consent??{},platform:platform??'unknown',
+    syncedAt:syncedAt??new Date().toISOString()
+  };
+  res.json({ok:true});
+});
 
-function showScreen(s){
-  document.querySelectorAll('.screen').forEach(el=>el.classList.remove('active'));
-  document.querySelectorAll('.nav-btn').forEach((b,i)=>b.classList.toggle('active',['dashboard','students','manage'][i]===s));
-  document.getElementById('screen-'+s).classList.add('active');
-  if(s==='dashboard') renderDashboard();
-  if(s==='students') renderStudents();
-  if(s==='manage') renderManage();
-}
+app.get('/api/report',auth,(req,res)=>{
+  if(req.session.role!=='student') return res.status(403).json({error:'אין הרשאה'});
+  res.json(reports[req.session.userId]||{});
+});
 
-async function renderDashboard(){
-  document.getElementById('dash-metrics').innerHTML='<div style="color:var(--text2);font-size:13px">טוען...</div>';
-  const data=await api('/api/students');
-  if(data.error){document.getElementById('dash-metrics').innerHTML='';return}
-  const active=data.filter(s=>s.consent);
-  const avg=active.length?(active.reduce((a,s)=>a+s.hours,0)/active.length):0;
-  const alerts=active.filter(s=>s.hours>=7);
-  document.getElementById('dash-metrics').innerHTML=`
-    <div class="metric"><div class="metric-label">תלמידים פעילים</div><div class="metric-val">${data.filter(s=>s.active).length}</div></div>
-    <div class="metric"><div class="metric-label">ממוצע יומי</div><div class="metric-val">${avg.toFixed(1)}ש'</div></div>
-    <div class="metric"><div class="metric-label">דורשים תשומת לב</div><div class="metric-val" style="color:var(--red)">${alerts.length}</div></div>`;
-  document.getElementById('dash-alerts').innerHTML=alerts.map(s=>`
-    <div class="alert-box"><strong>${s.name}</strong> — ${s.hours.toFixed(1)} שעות מסך ביום</div>`).join('');
-  const maxH=Math.max(...active.map(s=>s.hours),1);
-  document.getElementById('dist-chart').innerHTML=active.map(s=>`
-    <div class="week-col">
-      <div class="week-bar" style="height:${Math.round(s.hours/maxH*70)}px;background:${color(s.hours)}"></div>
-      <div class="week-lbl">${s.initials||s.name?.slice(0,2)}</div>
-    </div>`).join('');
-}
+app.post('/api/consent',auth,(req,res)=>{
+  if(req.session.role!=='student') return res.status(403).json({error:'אין הרשאה'});
+  const s=students[req.session.userId];
+  if(!s) return res.status(404).json({error:'לא נמצא'});
+  s.consent=req.body.total||false;
+  res.json({ok:true});
+});
 
-async function renderStudents(){
-  document.getElementById('students-list').innerHTML='<div style="color:var(--text2);font-size:13px;padding:1rem 0">טוען...</div>';
-  const data=await api('/api/students');
-  if(data.error){document.getElementById('students-list').innerHTML='';return}
-  const cls=document.getElementById('filter-class')?.value||'';
-  const status=document.getElementById('filter-status')?.value||'';
-  const classes=[...new Set(data.map(s=>s.className))].sort();
-  const sel=document.getElementById('filter-class');
-  if(sel){const cur=sel.value;sel.innerHTML='<option value="">כל הכיתות</option>'+classes.map(c=>`<option value="${c}">${c}</option>`).join('');sel.value=cur}
-  let f=data;
-  if(cls) f=f.filter(s=>s.className===cls);
-  if(status==='high') f=f.filter(s=>s.active&&s.hours>=7);
-  if(status==='medium') f=f.filter(s=>s.active&&s.hours>=3&&s.hours<7);
-  if(status==='low') f=f.filter(s=>s.active&&s.hours<3);
-  if(status==='pending') f=f.filter(s=>!s.active);
-  if(status==='no-consent') f=f.filter(s=>s.active&&!s.consent);
-  document.getElementById('students-list').innerHTML=f.length?f.map(s=>`
-    <div class="student-row">
-      <div class="avatar">${s.initials||s.name?.slice(0,2)}</div>
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <div><span style="font-size:14px;font-weight:500">${s.name}</span>
-          <span style="font-size:11px;color:var(--text2);margin-right:6px">${s.className} · ${s.platform}</span></div>
-          <div style="display:flex;gap:6px;align-items:center">
-            ${badge(s.hours,s.consent,s.active)}
-            <span style="font-size:13px;font-weight:500">${s.active&&s.consent?s.hours.toFixed(1)+"ש'":'—'}</span>
-          </div>
-        </div>
-        ${s.active
-          ?(s.consent
-            ?`<div class="bar-bg"><div class="bar-fill" style="width:${Math.min(100,Math.round(s.hours/12*100))}%;background:${color(s.hours)}"></div></div>`
-            :`<div style="font-size:12px;color:var(--text2)">ממתין לאישור שיתוף</div>`)
-          :`<div style="font-size:12px;color:var(--blue)">טרם הצטרף — שלח קישור</div>`}
-        ${s.lastSync?`<div style="font-size:11px;color:var(--text2);margin-top:2px">סונכרן: ${new Date(s.lastSync).toLocaleString('he-IL')}</div>`:''}
-      </div>
-    </div>`).join(''):'<div style="text-align:center;padding:2rem;color:var(--text2);font-size:14px">אין תלמידים</div>';
-}
-
-async function renderManage(){
-  document.getElementById('invite-modal-wrap').innerHTML='';
-  const classesData=await api('/api/classes');
-  const list=document.getElementById('classes-list');
-  const classSelect=document.getElementById('new-class');
-  if(!classesData.error){
-    list.innerHTML=classesData.length?classesData.map(c=>`
-      <div class="student-row">
-        <div style="flex:1;font-size:14px;font-weight:500">${c.name}</div>
-        <button class="btn btn-danger" style="font-size:13px" onclick="deleteClass('${c.id}')">מחק</button>
-      </div>`).join(''):'<div style="font-size:13px;color:var(--text2);padding:.5rem 0">אין כיתות עדיין</div>';
-    classSelect.innerHTML='<option value="">בחר כיתה</option>'+classesData.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
-  }
-}
-
-async function addClass(){
-  const name=document.getElementById('new-class-name').value.trim();
-  if(!name) return;
-  await api('/api/classes','POST',{name});
-  document.getElementById('new-class-name').value='';
-  renderManage();
-}
-async function deleteClass(id){
-  await api('/api/classes/'+id,'DELETE');
-  renderManage();
-}
-
-async function addStudent(){
-  const name=document.getElementById('new-name').value.trim();
-  const classId=document.getElementById('new-class').value;
-  const platform=document.getElementById('new-platform').value;
-  const msg=document.getElementById('add-msg');
-  if(!name||!classId){msg.style.color='var(--red)';msg.textContent='נא למלא שם וכיתה';return}
-  const data=await api('/api/students','POST',{name,classId,platform});
-  if(!data.ok){msg.style.color='var(--red)';msg.textContent=data.error||'שגיאה';return}
-  document.getElementById('new-name').value='';
-  msg.textContent='';
-  // הצג קישור הצטרפות
-  showInviteModal(name,data.joinUrl);
-}
-
-function showInviteModal(name,url){
-  document.getElementById('invite-modal-wrap').innerHTML=`
-    <div class="modal-overlay">
-      <div class="modal">
-        <div style="font-size:16px;font-weight:500;margin-bottom:8px">קישור לתלמיד: ${name}</div>
-        <div style="font-size:13px;color:var(--text2);margin-bottom:4px">שלח את הקישור הזה לתלמיד דרך ווצאפ / מייל:</div>
-        <div class="invite-link">${url}</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-blue" onclick="copyLink('${url}')">העתק קישור</button>
-          <button class="btn" onclick="shareLink('${name}','${url}')">שתף</button>
-          <button class="btn" onclick="document.getElementById('invite-modal-wrap').innerHTML=''">סגור</button>
-        </div>
-        <div style="font-size:12px;color:var(--text2);margin-top:.75rem">הקישור תקף לשימוש חד-פעמי בלבד</div>
-      </div>
-    </div>`;
-}
-
-function copyLink(url){
-  navigator.clipboard.writeText(url).then(()=>alert('הקישור הועתק!')).catch(()=>{});
-}
-
-function shareLink(name,url){
-  if(navigator.share){
-    navigator.share({title:`הצטרפות למעקב זמן מסך — ${name}`,url});
-  } else {
-    copyLink(url);
-  }
-}
-
-if(token){
-  fetch(SERVER+'/api/students',{headers:{'Authorization':'Bearer '+token}})
-    .then(r=>r.json())
-    .then(data=>{if(!data.error) enterApp(); else {token=null;localStorage.removeItem('teacher_token');}})
-    .catch(()=>{});
-}
-setInterval(()=>{if(token&&document.getElementById('screen-dashboard').classList.contains('active')) renderDashboard();},60000);
-</script>
-</body>
-</html>
+const PORT=process.env.PORT||3001;
+app.listen(PORT,()=>console.log(`Server on port ${PORT}`));
