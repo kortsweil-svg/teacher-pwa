@@ -379,15 +379,11 @@ function copyLink(url){
 }
 
 function shareLink(name, url, shortCode){
-  const text = `הצטרפות למעקב זמן מסך
-שם: ${name}
-קוד: ${shortCode}
-או סרוק QR באפליקציה`;
+  const text = 'הצטרפות למעקב זמן מסך\nשם: ' + name + '\nקוד: ' + shortCode + '\nאו הקלד באפליקציה';
   if(navigator.share){
-    navigator.share({title:`הצטרפות — ${name}`, text, url});
+    navigator.share({title:'הצטרפות — ' + name, text: text, url: url});
   } else {
-    navigator.clipboard.writeText(text + '
-' + url);
+    navigator.clipboard.writeText(text + '\n' + url);
     alert('הועתק!');
   }
 }
