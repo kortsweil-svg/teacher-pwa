@@ -344,10 +344,12 @@ function renderStudentDetail(s, avgHours){
   const diffColor = diff > 1 ? 'var(--red)' : diff < -1 ? 'var(--green)' : 'var(--text2)';
 
   const appsHtml = (()=>{
-    const blockList = ['launcher','signin','gms','systemui','packageinstaller','inputmethod','permissioncontroller','screentimestudent','com.android','android.settings','android.vending','google.settings'];
+    const blockList = ['launcher','signin','gms','systemui','packageinstaller','inputmethod','permissioncontroller','screentimestudent','com.android','android.settings','android.vending','google.settings','playconsole'];
     const filtered = Object.entries(byApp)
       .filter(([pkg]) => {
         const p = pkg.toLowerCase();
+        const userApps = ['youtube','chrome','whatsapp','instagram','facebook','tiktok','snapchat','telegram','twitter','spotify','netflix','gmail','maps','photos','camera','gallery','music','podcast','games','browser','sbrowser'];
+        if(userApps.some(a => p.includes(a))) return true;
         return !blockList.some(b => p.includes(b));
       })
       .map(([pkg,mins]) => [pkg, Number(mins)])
