@@ -338,6 +338,7 @@ function renderStudentsList(f){
 function renderStudentDetail(s, avgHours){
   const consent = s.rawConsent || {};
   const byApp = (typeof s.byApp === 'string') ? JSON.parse(s.byApp) : (s.byApp || {});
+  console.log('byApp for', s.name, ':', JSON.stringify(byApp));
   const timing = (typeof s.timing === 'string') ? JSON.parse(s.timing) : (s.timing || {});
   const diff = s.hours - avgHours;
   const diffStr = diff > 0 ? `+${diff.toFixed(1)}ש' מעל הממוצע` : diff < 0 ? `${diff.toFixed(1)}ש' מתחת לממוצע` : 'בדיוק בממוצע';
