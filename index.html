@@ -344,17 +344,21 @@ function renderStudentDetail(s, avgHours){
   const diffColor = diff > 1 ? 'var(--red)' : diff < -1 ? 'var(--green)' : 'var(--text2)';
 
   const appsHtml = (()=>{
-    const systemPkgs = ['launcher','gms','signin','systemui','packageinstaller','inputmethod','android.settings','android.vending','google.settings','android.gms'];
+    const blockList = ['launcher','signin','gms','systemui','packageinstaller','inputmethod','permissioncontroller','screentimestudent','com.android','android.settings','android.vending','google.settings'];
     const filtered = Object.entries(byApp)
-      .filter(([pkg]) => !systemPkgs.some(s => pkg.toLowerCase().includes(s)))
+      .filter(([pkg]) => {
+        const p = pkg.toLowerCase();
+        return !blockList.some(b => p.includes(b));
+      })
       .map(([pkg,mins]) => [pkg, Number(mins)])
-      .filter(([,mins]) => mins > 1)
-      .sort((a,b) => b[1]-a[1])
+      .filter(([,mins]) => mins > 0)
+      .sort((a,b) => Number(b[1])-Number(a[1]))
       .slice(0,8);
     if(!filtered.length) return '<div style="font-size:12px;color:var(--text2)">לא נמצאו אפליקציות משתמש</div>';
+    const appNames = {'android.youtube':'YouTube','android.chrome':'Chrome','com.whatsapp':'WhatsApp','com.instagram.android':'Instagram','com.facebook.katana':'Facebook','com.tiktok':'TikTok','android.googlequicksearchbox':'Google','app.sbrowser':'Samsung Browser'};
     return filtered.map(([pkg,mins])=>{
-      const name = pkg.split('.').slice(-2).join('.');
-      const display = mins >= 60 ? (mins/60).toFixed(1)+"ש'" : mins+"ד'";
+      const name = appNames[pkg] || pkg.split('.').slice(-1)[0];
+      const display = Number(mins) >= 60 ? (Number(mins)/60).toFixed(1)+"ש'" : Number(mins)+"ד'";
       return `<div class="app-row"><span>${name}</span><span style="font-weight:500">${display}</span></div>`;
     }).join('');
   })();
