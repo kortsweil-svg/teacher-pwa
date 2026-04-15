@@ -337,26 +337,27 @@ function renderStudentsList(f){
 
 function renderStudentDetail(s, avgHours){
   const consent = s.rawConsent || {};
-  const byApp = s.byApp || {};
-  const timing = s.timing || {};
+  const byApp = (typeof s.byApp === 'string') ? JSON.parse(s.byApp) : (s.byApp || {});
+  const timing = (typeof s.timing === 'string') ? JSON.parse(s.timing) : (s.timing || {});
   const diff = s.hours - avgHours;
   const diffStr = diff > 0 ? `+${diff.toFixed(1)}ש' מעל הממוצע` : diff < 0 ? `${diff.toFixed(1)}ש' מתחת לממוצע` : 'בדיוק בממוצע';
   const diffColor = diff > 1 ? 'var(--red)' : diff < -1 ? 'var(--green)' : 'var(--text2)';
 
   const appsHtml = Object.keys(byApp).length > 0
-    ? Object.entries(byApp).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([app,mins])=>`
+    ? Object.entries(byApp).sort((a,b)=>Number(b[1])-Number(a[1])).slice(0,5).map(([app,mins])=>`
         <div class="app-row">
           <span>${app.split('.').pop()}</span>
-          <span style="font-weight:500">${Math.round(mins/60*10)/10}ש'</span>
+          <span style="font-weight:500">${(Number(mins)/60).toFixed(1)}ש'</span>
         </div>`).join('')
-    : '<div style="font-size:12px;color:var(--text2)">אין נתונים (לא אושר שיתוף)</div>';
+    : '<div style="font-size:12px;color:var(--text2)">אין פירוט אפליקציות</div>';
 
+  const t2 = (typeof timing === 'string') ? JSON.parse(timing) : (timing||{});
   const timingHtml = `
     <div class="time-grid">
-      <div class="time-block"><div class="time-lbl">בוקר</div><div class="time-val">${timing.morning||'—'}</div></div>
-      <div class="time-block"><div class="time-lbl">צהריים</div><div class="time-val">${timing.noon||'—'}</div></div>
-      <div class="time-block"><div class="time-lbl">ערב</div><div class="time-val">${timing.evening||'—'}</div></div>
-      <div class="time-block"><div class="time-lbl">לילה</div><div class="time-val">${timing.night||'—'}</div></div>
+      <div class="time-block"><div class="time-lbl">בוקר</div><div class="time-val">${t2.morning||'—'}</div></div>
+      <div class="time-block"><div class="time-lbl">צהריים</div><div class="time-val">${t2.noon||'—'}</div></div>
+      <div class="time-block"><div class="time-lbl">ערב</div><div class="time-val">${t2.evening||'—'}</div></div>
+      <div class="time-block"><div class="time-lbl">לילה</div><div class="time-val">${t2.night||'—'}</div></div>
     </div>`;
 
   return `<div class="student-detail" onclick="event.stopPropagation()">
