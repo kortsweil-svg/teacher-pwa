@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>מעקב זמן מסך — מורה</title>
   <link rel="manifest" href="manifest.json"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{--bg:#fff;--bg2:#f5f5f3;--bg3:#eeede8;--text:#1a1a18;--text2:#6b6b67;--border:rgba(0,0,0,0.12);--border2:rgba(0,0,0,0.22);--green:#3B6D11;--green-bg:#EAF3DE;--amber:#854F0B;--amber-bg:#FAEEDA;--red:#A32D2D;--red-bg:#FCEBEB;--blue:#185FA5;--blue-bg:#E6F1FB;--r:8px;--rl:12px}
@@ -30,7 +31,6 @@
     .badge-amber{background:var(--amber-bg);color:var(--amber)}
     .badge-red{background:var(--red-bg);color:var(--red)}
     .badge-gray{background:var(--bg2);color:var(--text2)}
-    .badge-blue{background:var(--blue-bg);color:var(--blue)}
     .student-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:0.5px solid var(--border)}
     .student-row:last-child{border-bottom:none}
     .avatar{width:38px;height:38px;border-radius:50%;background:var(--blue-bg);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:var(--blue);flex-shrink:0}
@@ -53,6 +53,7 @@
     .week-bar{width:100%;border-radius:3px 3px 0 0;min-height:2px}
     .week-lbl{font-size:11px;color:var(--text2)}
     .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:8px;flex-wrap:wrap}
+    .code-display{font-size:48px;font-weight:500;letter-spacing:10px;text-align:center;padding:1rem 0;color:var(--text)}
     /* Auth */
     .auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem}
     .auth-card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--rl);padding:2rem;width:100%;max-width:380px}
@@ -64,13 +65,8 @@
     .auth-toggle{font-size:13px;color:var(--text2);text-align:center}
     .auth-toggle a{color:var(--blue);cursor:pointer}
     .auth-error{background:var(--red-bg);color:var(--red);border-radius:var(--r);padding:.5rem .75rem;font-size:13px;margin-bottom:.75rem;display:none}
-    /* Invite modal */
-    .modal-overlay{min-height:300px;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;padding:1rem;border-radius:var(--rl);margin-bottom:1rem}
-    .modal{background:var(--bg);border-radius:var(--rl);padding:1.5rem;width:100%;max-width:420px}
-    .invite-link{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--r);padding:.75rem 1rem;font-size:13px;word-break:break-all;margin:1rem 0;color:var(--blue)}
     @media(max-width:600px){.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))};header{padding:0 1rem};main{padding:1rem}}
   </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 
@@ -103,7 +99,19 @@
     </nav>
   </header>
   <main>
+
     <div id="screen-dashboard" class="screen active">
+      <!-- קוד מוסד בולט -->
+      <div class="card" style="border-color:rgba(24,95,165,0.3);background:var(--blue-bg)">
+        <div style="font-size:12px;color:var(--blue);margin-bottom:4px">קוד המוסד — שתף עם התלמידים</div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="code-display" id="inst-code-display" style="padding:0;font-size:36px;letter-spacing:8px"></div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-blue" onclick="copyCode()">העתק</button>
+            <button class="btn" onclick="shareCode()">שתף ↗</button>
+          </div>
+        </div>
+      </div>
       <div class="metric-grid" id="dash-metrics"></div>
       <div id="dash-alerts"></div>
       <div class="card">
@@ -124,7 +132,6 @@
               <option value="high">גבוה (7+ש')</option>
               <option value="medium">מתון (3-7ש')</option>
               <option value="low">תקין (עד 3ש')</option>
-              <option value="pending">ממתין להצטרפות</option>
               <option value="no-consent">ללא הסכמה</option>
             </select>
           </div>
@@ -134,37 +141,21 @@
     </div>
 
     <div id="screen-manage" class="screen">
-      <div id="invite-modal-wrap"></div>
       <div class="card">
-        <div class="card-title">כיתות</div>
-        <div style="display:flex;gap:8px;margin-bottom:1rem">
-          <input type="text" id="new-class-name" placeholder="שם כיתה (למשל ט׳2)" style="flex:1">
-          <button class="btn btn-primary" onclick="addClass()">הוסף כיתה</button>
+        <div class="card-title">קוד המוסד</div>
+        <div class="card-sub">שתף קוד אחד עם כל התלמידים — כל אחד יירשם בעצמו</div>
+        <div class="code-display" id="manage-code-display"></div>
+        <div style="display:flex;gap:8px;justify-content:center;margin-top:.5rem">
+          <button class="btn btn-blue" onclick="copyCode()">העתק קוד</button>
+          <button class="btn" onclick="shareCode()">שתף ↗</button>
         </div>
-        <div id="classes-list"></div>
       </div>
       <div class="card">
-        <div class="card-title">הוסף תלמיד</div>
-        <div class="card-sub">לאחר ההוספה תקבל קישור לשלוח לתלמיד</div>
-        <div class="form-group">
-          <label class="form-label">שם מלא</label>
-          <input type="text" id="new-name" placeholder="דניאל כהן" style="width:100%">
-        </div>
-        <div class="form-group">
-          <label class="form-label">כיתה</label>
-          <select id="new-class" style="width:100%"><option value="">בחר כיתה</option></select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">פלטפורמה</label>
-          <select id="new-platform" style="width:100%">
-            <option value="iOS">iOS (iPhone)</option>
-            <option value="Android">Android</option>
-          </select>
-        </div>
-        <button class="btn btn-primary" onclick="addStudent()">הוסף תלמיד וקבל קישור</button>
-        <div id="add-msg" style="margin-top:.75rem;font-size:13px"></div>
+        <div class="card-title">ניהול תלמידים</div>
+        <div id="manage-list"></div>
       </div>
     </div>
+
   </main>
 </div>
 
@@ -172,6 +163,7 @@
 const SERVER='https://screentime-server.onrender.com';
 let token=localStorage.getItem('teacher_token');
 let teacherName=localStorage.getItem('teacher_name')||'';
+let institutionCode=localStorage.getItem('institution_code')||'';
 let isReg=false;
 
 const api=(path,method='GET',body=null)=>fetch(SERVER+path,{
@@ -180,8 +172,7 @@ const api=(path,method='GET',body=null)=>fetch(SERVER+path,{
 }).then(r=>r.json());
 
 function color(h){return h<3?'#3B6D11':h<6?'#854F0B':'#A32D2D'}
-function badge(h,consent,active){
-  if(!active) return '<span class="badge badge-blue">ממתין להצטרפות</span>';
+function badge(h,consent){
   if(!consent) return '<span class="badge badge-gray">ללא הסכמה</span>';
   if(h<3) return '<span class="badge badge-green">תקין</span>';
   if(h<6) return '<span class="badge badge-amber">מתון</span>';
@@ -217,9 +208,12 @@ async function submitAuth(){
       data=await api('/api/teacher/login','POST',{username,password});
     }
     if(!data.ok){showError(data.error||'שגיאה');btn.textContent=isReg?'הרשמה':'כניסה';btn.disabled=false;return}
-    token=data.token; teacherName=data.teacher.name;
+    token=data.token;
+    teacherName=data.teacher.name;
+    institutionCode=data.teacher.institutionCode||'';
     localStorage.setItem('teacher_token',token);
     localStorage.setItem('teacher_name',teacherName);
+    localStorage.setItem('institution_code',institutionCode);
     enterApp();
   }catch(e){showError('לא ניתן להתחבר לשרת');btn.textContent=isReg?'הרשמה':'כניסה';btn.disabled=false}
 }
@@ -228,6 +222,9 @@ function enterApp(){
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app-screen').style.display='block';
   document.getElementById('teacher-header').textContent=teacherName;
+  const c=institutionCode||localStorage.getItem('institution_code')||'';
+  document.getElementById('inst-code-display').textContent=c;
+  document.getElementById('manage-code-display').textContent=c;
   renderDashboard();
 }
 
@@ -247,6 +244,18 @@ function showScreen(s){
   if(s==='manage') renderManage();
 }
 
+function copyCode(){
+  const code=localStorage.getItem('institution_code')||'';
+  navigator.clipboard.writeText(code).then(()=>alert('קוד הועתק: '+code));
+}
+
+function shareCode(){
+  const code=localStorage.getItem('institution_code')||'';
+  const text='הורד את אפליקציית מעקב זמן מסך והכנס את קוד המוסד: '+code;
+  if(navigator.share){navigator.share({title:'הצטרפות לאפליקציה',text});}
+  else{navigator.clipboard.writeText(text);alert('הועתק!');}
+}
+
 async function renderDashboard(){
   document.getElementById('dash-metrics').innerHTML='<div style="color:var(--text2);font-size:13px">טוען...</div>';
   const data=await api('/api/students');
@@ -255,7 +264,7 @@ async function renderDashboard(){
   const avg=active.length?(active.reduce((a,s)=>a+s.hours,0)/active.length):0;
   const alerts=active.filter(s=>s.hours>=7);
   document.getElementById('dash-metrics').innerHTML=`
-    <div class="metric"><div class="metric-label">תלמידים פעילים</div><div class="metric-val">${data.filter(s=>s.active).length}</div></div>
+    <div class="metric"><div class="metric-label">תלמידים רשומים</div><div class="metric-val">${data.length}</div></div>
     <div class="metric"><div class="metric-label">ממוצע יומי</div><div class="metric-val">${avg.toFixed(1)}ש'</div></div>
     <div class="metric"><div class="metric-label">דורשים תשומת לב</div><div class="metric-val" style="color:var(--red)">${alerts.length}</div></div>`;
   document.getElementById('dash-alerts').innerHTML=alerts.map(s=>`
@@ -279,119 +288,55 @@ async function renderStudents(){
   if(sel){const cur=sel.value;sel.innerHTML='<option value="">כל הכיתות</option>'+classes.map(c=>`<option value="${c}">${c}</option>`).join('');sel.value=cur}
   let f=data;
   if(cls) f=f.filter(s=>s.className===cls);
-  if(status==='high') f=f.filter(s=>s.active&&s.hours>=7);
-  if(status==='medium') f=f.filter(s=>s.active&&s.hours>=3&&s.hours<7);
-  if(status==='low') f=f.filter(s=>s.active&&s.hours<3);
-  if(status==='pending') f=f.filter(s=>!s.active);
-  if(status==='no-consent') f=f.filter(s=>s.active&&!s.consent);
+  if(status==='high') f=f.filter(s=>s.consent&&s.hours>=7);
+  if(status==='medium') f=f.filter(s=>s.consent&&s.hours>=3&&s.hours<7);
+  if(status==='low') f=f.filter(s=>s.consent&&s.hours<3);
+  if(status==='no-consent') f=f.filter(s=>!s.consent);
   document.getElementById('students-list').innerHTML=f.length?f.map(s=>`
     <div class="student-row">
       <div class="avatar">${s.initials||s.name?.slice(0,2)}</div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
           <div><span style="font-size:14px;font-weight:500">${s.name}</span>
-          <span style="font-size:11px;color:var(--text2);margin-right:6px">${s.className} · ${s.platform}</span></div>
+          <span style="font-size:11px;color:var(--text2);margin-right:6px">${s.className}</span></div>
           <div style="display:flex;gap:6px;align-items:center">
-            ${badge(s.hours,s.consent,s.active)}
-            <span style="font-size:13px;font-weight:500">${s.active&&s.consent?s.hours.toFixed(1)+"ש'":'—'}</span>
+            ${badge(s.hours,s.consent)}
+            <span style="font-size:13px;font-weight:500">${s.consent?s.hours.toFixed(1)+"ש'":'—'}</span>
           </div>
         </div>
-        ${s.active
-          ?(s.consent
-            ?`<div class="bar-bg"><div class="bar-fill" style="width:${Math.min(100,Math.round(s.hours/12*100))}%;background:${color(s.hours)}"></div></div>`
-            :`<div style="font-size:12px;color:var(--text2)">ממתין לאישור שיתוף</div>`)
-          :`<div style="font-size:12px;color:var(--blue)">טרם הצטרף — שלח קישור</div>`}
+        ${s.consent
+          ?`<div class="bar-bg"><div class="bar-fill" style="width:${Math.min(100,Math.round(s.hours/12*100))}%;background:${color(s.hours)}"></div></div>`
+          :`<div style="font-size:12px;color:var(--text2)">ממתין לאישור שיתוף</div>`}
         ${s.lastSync?`<div style="font-size:11px;color:var(--text2);margin-top:2px">סונכרן: ${new Date(s.lastSync).toLocaleString('he-IL')}</div>`:''}
       </div>
-    </div>`).join(''):'<div style="text-align:center;padding:2rem;color:var(--text2);font-size:14px">אין תלמידים</div>';
+    </div>`).join(''):'<div style="text-align:center;padding:2rem;color:var(--text2);font-size:14px">אין תלמידים עדיין</div>';
 }
 
 async function renderManage(){
-  document.getElementById('invite-modal-wrap').innerHTML='';
-  const classesData=await api('/api/classes');
-  const list=document.getElementById('classes-list');
-  const classSelect=document.getElementById('new-class');
-  if(!classesData.error){
-    list.innerHTML=classesData.length?classesData.map(c=>`
+  const data=await api('/api/students');
+  if(!data.error){
+    document.getElementById('manage-list').innerHTML=data.length?data.map(s=>`
       <div class="student-row">
-        <div style="flex:1;font-size:14px;font-weight:500">${c.name}</div>
-        <button class="btn btn-danger" style="font-size:13px" onclick="deleteClass('${c.id}')">מחק</button>
-      </div>`).join(''):'<div style="font-size:13px;color:var(--text2);padding:.5rem 0">אין כיתות עדיין</div>';
-    classSelect.innerHTML='<option value="">בחר כיתה</option>'+classesData.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+        <div class="avatar">${s.initials||s.name?.slice(0,2)}</div>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:500">${s.name}</div>
+          <div style="font-size:12px;color:var(--text2)">${s.className} · ${s.consent?'אישר':'ממתין'}</div>
+        </div>
+        <button class="btn btn-danger" style="font-size:13px" onclick="removeStudent('${s.id}')">הסר</button>
+      </div>`).join(''):'<div style="font-size:13px;color:var(--text2);padding:.5rem 0">אין תלמידים עדיין</div>';
   }
 }
 
-async function addClass(){
-  const name=document.getElementById('new-class-name').value.trim();
-  if(!name) return;
-  await api('/api/classes','POST',{name});
-  document.getElementById('new-class-name').value='';
+async function removeStudent(id){
+  await api('/api/students/'+id,'DELETE');
   renderManage();
-}
-async function deleteClass(id){
-  await api('/api/classes/'+id,'DELETE');
-  renderManage();
-}
-
-async function addStudent(){
-  const name=document.getElementById('new-name').value.trim();
-  const classId=document.getElementById('new-class').value;
-  const platform=document.getElementById('new-platform').value;
-  const msg=document.getElementById('add-msg');
-  if(!name||!classId){msg.style.color='var(--red)';msg.textContent='נא למלא שם וכיתה';return}
-  const data=await api('/api/students','POST',{name,classId,platform});
-  if(!data.ok){msg.style.color='var(--red)';msg.textContent=data.error||'שגיאה';return}
-  document.getElementById('new-name').value='';
-  msg.textContent='';
-  showInviteModal(name, data.joinUrl, data.shortCode);
-}
-
-function showInviteModal(name, url, shortCode){
-  document.getElementById('invite-modal-wrap').innerHTML=`
-    <div class="modal-overlay">
-      <div class="modal">
-        <div style="font-size:16px;font-weight:500;margin-bottom:16px">הצטרפות לתלמיד: ${name}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-          <div style="text-align:center">
-            <div style="font-size:12px;color:var(--text2);margin-bottom:8px">סרוק QR Code</div>
-            <div id="qr-code" style="display:inline-block;background:#fff;padding:8px;border-radius:8px;border:0.5px solid var(--border)"></div>
-          </div>
-          <div style="display:flex;flex-direction:column;justify-content:center;align-items:center">
-            <div style="font-size:12px;color:var(--text2);margin-bottom:8px">או הקלד קוד</div>
-            <div style="font-size:36px;font-weight:500;letter-spacing:6px;color:var(--text)">${shortCode}</div>
-            <button class="btn" style="margin-top:12px;font-size:13px" onclick="navigator.clipboard.writeText('${shortCode}')">העתק קוד</button>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-blue" onclick="shareLink('${name}','${url}','${shortCode}')">שתף ↗</button>
-          <button class="btn" onclick="document.getElementById('invite-modal-wrap').innerHTML=''">סגור</button>
-        </div>
-        <div style="font-size:12px;color:var(--text2);margin-top:.75rem">תקף לשימוש חד-פעמי בלבד</div>
-      </div>
-    </div>`;
-  setTimeout(()=>{
-    try { new QRCode(document.getElementById('qr-code'), {text: url, width:120, height:120, colorDark:'#1a1a18', colorLight:'#ffffff'}); } catch(e){}
-  }, 100);
-}
-
-function copyLink(url){
-  navigator.clipboard.writeText(url).then(()=>alert('הקישור הועתק!')).catch(()=>{});
-}
-
-function shareLink(name, url, shortCode){
-  const text = 'הצטרפות למעקב זמן מסך\nשם: ' + name + '\nקוד: ' + shortCode + '\nאו הקלד באפליקציה';
-  if(navigator.share){
-    navigator.share({title:'הצטרפות — ' + name, text: text, url: url});
-  } else {
-    navigator.clipboard.writeText(text + '\n' + url);
-    alert('הועתק!');
-  }
+  renderStudents();
 }
 
 if(token){
   fetch(SERVER+'/api/students',{headers:{'Authorization':'Bearer '+token}})
     .then(r=>r.json())
-    .then(data=>{if(!data.error) enterApp(); else {token=null;localStorage.removeItem('teacher_token');}})
+    .then(data=>{if(!data.error) enterApp(); else{token=null;localStorage.removeItem('teacher_token');}})
     .catch(()=>{});
 }
 setInterval(()=>{if(token&&document.getElementById('screen-dashboard').classList.contains('active')) renderDashboard();},60000);
