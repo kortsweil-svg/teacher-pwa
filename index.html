@@ -344,7 +344,7 @@ function renderStudentDetail(s, avgHours){
   const diffColor = diff > 1 ? 'var(--red)' : diff < -1 ? 'var(--green)' : 'var(--text2)';
 
   const appsHtml = (()=>{
-    const systemPkgs = ['android','com.android','launcher','settings','gms','signin','systemui','packageinstaller','inputmethod','vending','google.gms','google.settings'];
+    const systemPkgs = ['launcher','gms','signin','systemui','packageinstaller','inputmethod','android.settings','android.vending','google.settings','android.gms'];
     const filtered = Object.entries(byApp)
       .filter(([pkg]) => !systemPkgs.some(s => pkg.toLowerCase().includes(s)))
       .map(([pkg,mins]) => [pkg, Number(mins)])
