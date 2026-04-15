@@ -129,6 +129,10 @@
         <div class="card-sub">כל התלמידים — שבוע נוכחי</div>
         <div class="week-chart" id="dist-chart"></div>
       </div>
+      <div class="card" style="margin-top:0">
+        <div class="card-title">ממוצע לפי כיתה</div>
+        <div id="class-breakdown"></div>
+      </div>
     </div>
 
     <div id="screen-students" class="screen">
@@ -285,6 +289,40 @@ async function renderDashboard(){
       <div class="week-bar" style="height:${Math.round(s.hours/maxH*70)}px;background:${color(s.hours)}"></div>
       <div class="week-lbl">${s.initials||s.name?.slice(0,2)}</div>
     </div>`).join('');
+
+  // התפלגות לפי כיתה
+  const classes = {};
+  data.forEach(s => {
+    if (!classes[s.className]) classes[s.className] = {total:0, count:0, students:0};
+    classes[s.className].students++;
+    if (s.consent && s.hours > 0) { classes[s.className].total += s.hours; classes[s.className].count++; }
+  });
+  const classEl = document.getElementById('class-breakdown');
+  if (classEl) {
+    const rows = Object.entries(classes).sort((a,b)=>a[0].localeCompare(b[0], 'he'));
+    if (!rows.length) { classEl.innerHTML='<div style="font-size:13px;color:var(--text2)">אין נתונים</div>'; return; }
+    classEl.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0;margin-bottom:4px">
+        <div style="font-size:11px;color:var(--text2);padding:4px 0">כיתה</div>
+        <div style="font-size:11px;color:var(--text2);padding:4px 0;text-align:center">ממוצע</div>
+        <div style="font-size:11px;color:var(--text2);padding:4px 0;text-align:center">תלמידים</div>
+        <div style="font-size:11px;color:var(--text2);padding:4px 0;text-align:center">סטטוס</div>
+      </div>` +
+      rows.map(([cls, d]) => {
+        const avg = d.count ? d.total/d.count : 0;
+        const statusBadge = d.count === 0
+          ? `<span class="badge badge-gray">אין נתונים</span>`
+          : avg < 3 ? `<span class="badge badge-green">תקין</span>`
+          : avg < 6 ? `<span class="badge badge-amber">מתון</span>`
+          : `<span class="badge badge-red">גבוה</span>`;
+        return `<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0;padding:7px 0;border-top:0.5px solid var(--border)">
+          <div style="font-size:14px;font-weight:500">${cls}</div>
+          <div style="font-size:13px;text-align:center">${d.count ? avg.toFixed(1)+"ש'" : "—"}</div>
+          <div style="font-size:13px;text-align:center;color:var(--text2)">${d.students}</div>
+          <div style="text-align:center">${statusBadge}</div>
+        </div>`;
+      }).join('');
+  }
 }
 
 let allStudentsData = [];
