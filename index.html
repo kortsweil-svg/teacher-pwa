@@ -87,6 +87,14 @@
     <div id="auth-error" class="auth-error"></div>
     <div id="reg-name-wrap" style="display:none">
       <input class="auth-input" type="text" id="auth-fullname" placeholder="שם מלא"/>
+      <select class="auth-input" id="auth-security-q" style="margin-bottom:.75rem">
+        <option value="">בחר שאלת אבטחה</option>
+        <option value="school">שם בית הספר שלך?</option>
+        <option value="city">באיזו עיר גרת בילדות?</option>
+        <option value="teacher">שם המורה האהוב עליך?</option>
+        <option value="pet">שם חיית המחמד הראשונה שלך?</option>
+      </select>
+      <input class="auth-input" type="text" id="auth-security-a" placeholder="תשובה לשאלת האבטחה"/>
     </div>
     <input class="auth-input" type="text" id="auth-username" placeholder="שם משתמש"/>
     <input class="auth-input" type="password" id="auth-password" placeholder="סיסמה"/>
@@ -94,6 +102,21 @@
     <div class="auth-toggle">
       <span id="auth-toggle-txt">אין לך חשבון?</span>
       <a onclick="toggleMode()"> הירשם כאן</a>
+    </div>
+    <div class="auth-toggle" style="margin-top:8px">
+      <a onclick="showForgot()" id="forgot-link">שכחתי סיסמה</a>
+    </div>
+    <div id="forgot-wrap" style="display:none;margin-top:1rem;border-top:0.5px solid var(--border);padding-top:1rem">
+      <div style="font-size:14px;font-weight:500;margin-bottom:.75rem;color:var(--text)">שחזור סיסמה</div>
+      <input class="auth-input" type="text" id="forgot-username" placeholder="שם משתמש"/>
+      <div id="forgot-question" style="display:none">
+        <div id="forgot-q-text" style="font-size:13px;color:var(--text2);margin-bottom:.5rem"></div>
+        <input class="auth-input" type="text" id="forgot-answer" placeholder="תשובה"/>
+        <input class="auth-input" type="password" id="forgot-newpass" placeholder="סיסמה חדשה"/>
+        <button class="auth-btn" onclick="doReset()">אפס סיסמה</button>
+      </div>
+      <div id="forgot-question-hidden" style="display:none"></div>
+      <button class="auth-btn" id="forgot-check-btn" onclick="checkSecurity()" style="display:block">המשך</button>
     </div>
   </div>
 </div>
@@ -195,6 +218,81 @@ function badge(h,consent){
 
 function showError(msg){const e=document.getElementById('auth-error');e.textContent=msg;e.style.display='block'}
 
+function showForgot(){
+  const w = document.getElementById('forgot-wrap');
+  const l = document.getElementById('forgot-link');
+  w.style.display = w.style.display==='none' ? 'block' : 'none';
+  l.textContent = w.style.display==='none' ? 'שכחתי סיסמה' : 'סגור';
+}
+
+async function checkSecurity(){
+  const username = document.getElementById('forgot-username').value.trim();
+  if(!username){alert('נא להכניס שם משתמש');return;}
+  const btn = document.getElementById('forgot-check-btn');
+  btn.textContent='...';btn.disabled=true;
+  try {
+    const res = await fetch(SERVER+'/api/teacher/check-security',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username, securityAnswer:'__check__'})
+    });
+    const data = await res.json();
+    const q = data.question || (data.error === 'תשובה שגויה' ? true : null);
+    if(q || data.error === 'תשובה שגויה'){
+      const r2 = await fetch(SERVER+'/api/teacher/check-security',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({username, securityAnswer:''})
+      });
+      const d2 = await r2.json();
+      document.getElementById('forgot-q-text').textContent = d2.question||'שאלת האבטחה שלך';
+      document.getElementById('forgot-question').style.display='block';
+      document.getElementById('forgot-check-btn').style.display='none';
+      document.getElementById('forgot-question-hidden').textContent=username;
+    } else {
+      alert(data.error||'שגיאה');
+    }
+  } catch(e){alert('שגיאה בחיבור');}
+  btn.textContent='המשך';btn.disabled=false;
+}
+
+async function checkSecurityStep2(){
+  const username = document.getElementById('forgot-question-hidden').textContent;
+  if(!username) return;
+  try {
+    const res = await fetch(SERVER+'/api/teacher/check-security',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username, securityAnswer:''})
+    });
+    const data = await res.json();
+    if(data.question){
+      document.getElementById('forgot-q-text').textContent = data.question;
+      document.getElementById('forgot-question').style.display='block';
+      document.getElementById('forgot-check-btn').style.display='none';
+    }
+  } catch(e){}
+}
+
+async function doReset(){
+  const username = document.getElementById('forgot-username').value.trim();
+  const answer = document.getElementById('forgot-answer').value.trim();
+  const newpass = document.getElementById('forgot-newpass').value;
+  if(!answer||!newpass){alert('נא למלא את כל השדות');return;}
+  if(newpass.length<4){alert('הסיסמה חייבת להכיל לפחות 4 תווים');return;}
+  try {
+    const res = await fetch(SERVER+'/api/teacher/reset-password',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username, securityAnswer:answer, newPassword:newpass})
+    });
+    const data = await res.json();
+    if(data.ok){
+      alert('הסיסמה אופסה בהצלחה! אפשר להתחבר עם הסיסמה החדשה.');
+      document.getElementById('forgot-wrap').style.display='none';
+      document.getElementById('forgot-link').textContent='שכחתי סיסמה';
+    } else {
+      alert(data.error||'שגיאה');
+    }
+  } catch(e){alert('שגיאה בחיבור');}
+}
+
 function toggleMode(){
   isReg=!isReg;
   document.getElementById('auth-title').textContent=isReg?'הרשמה':'כניסה למורה';
@@ -217,7 +315,10 @@ async function submitAuth(){
     if(isReg){
       const name=document.getElementById('auth-fullname').value.trim();
       if(!name){showError('נא למלא שם מלא');btn.textContent='הרשמה';btn.disabled=false;return}
-      data=await api('/api/teacher/register','POST',{username,password,name});
+      const secQ = document.getElementById('auth-security-q').value;
+      const secA = document.getElementById('auth-security-a').value.trim();
+      if(!secQ||!secA){showError('נא לבחור שאלת אבטחה ולמלא תשובה');btn.textContent='הרשמה';btn.disabled=false;return;}
+      data=await api('/api/teacher/register','POST',{username,password,name,securityQuestion:secQ,securityAnswer:secA});
     } else {
       data=await api('/api/teacher/login','POST',{username,password});
     }
