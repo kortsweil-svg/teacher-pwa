@@ -127,6 +127,7 @@
     <nav>
       <button class="nav-btn active" onclick="showScreen('dashboard')">דשבורד</button>
       <button class="nav-btn" onclick="showScreen('students')">תלמידים</button>
+      <button class="nav-btn" onclick="showScreen('history')">היסטוריה</button>
       <button class="nav-btn" onclick="showScreen('manage')">ניהול</button>
       <button class="nav-btn" onclick="logout()" style="color:var(--red)">יציאה</button>
     </nav>
@@ -174,6 +175,25 @@
           </div>
         </div>
         <div style="margin-top:1rem" id="students-list"></div>
+      </div>
+    </div>
+
+    <div id="screen-history" class="screen">
+      <div class="card">
+        <div class="toolbar">
+          <div class="card-title" style="margin-bottom:0">היסטוריית זמן מסך</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select id="hist-weeks" onchange="renderHistory()">
+              <option value="1">שבוע אחרון</option>
+              <option value="2">שבועיים</option>
+              <option value="4" selected>חודש</option>
+              <option value="8">חודשיים</option>
+            </select>
+            <select id="hist-class" onchange="renderHistory()"><option value="">כל הכיתות</option></select>
+          </div>
+        </div>
+        <div id="history-chart" style="margin-top:1rem"></div>
+        <div id="history-list" style="margin-top:1rem"></div>
       </div>
     </div>
 
@@ -356,6 +376,7 @@ function showScreen(s){
   document.getElementById('screen-'+s).classList.add('active');
   if(s==='dashboard') renderDashboard();
   if(s==='students') renderStudents();
+  if(s==='history') renderHistory();
   if(s==='manage') renderManage();
 }
 
@@ -533,6 +554,72 @@ function renderStudentDetail(s, avgHours){
       </div>
     </div>
   </div>`;
+}
+
+async function renderHistory(){
+  const weeks = document.getElementById('hist-weeks')?.value || 4;
+  const cls = document.getElementById('hist-class')?.value || '';
+  const data = await api('/api/history?weeks='+weeks);
+  if(data.error) return;
+
+  // עדכן כיתות
+  const classes = [...new Set(data.map(s=>s.class_name).filter(Boolean))].sort();
+  const sel = document.getElementById('hist-class');
+  if(sel){const cur=sel.value;sel.innerHTML='<option value="">כל הכיתות</option>'+classes.map(c=>`<option value="${c}">${c}</option>`).join('');sel.value=cur;}
+
+  // סנן לפי כיתה
+  const filtered = cls ? data.filter(s=>s.class_name===cls) : data;
+
+  // קבץ לפי שבוע
+  const byWeek = {};
+  filtered.forEach(row => {
+    if(!row.week_start) return;
+    if(!byWeek[row.week_start]) byWeek[row.week_start] = [];
+    byWeek[row.week_start].push(row);
+  });
+
+  const weeks_sorted = Object.keys(byWeek).sort().reverse();
+  if(!weeks_sorted.length){
+    document.getElementById('history-list').innerHTML='<div style="color:var(--text2);font-size:13px;padding:1rem 0">אין נתונים היסטוריים עדיין</div>';
+    return;
+  }
+
+  // גרף ממוצע שבועי
+  const weekAvgs = weeks_sorted.map(w => {
+    const rows = byWeek[w].filter(r=>r.daily_average>0);
+    const avg = rows.length ? rows.reduce((a,r)=>a+parseFloat(r.daily_average),0)/rows.length : 0;
+    return {week:w, avg};
+  }).reverse();
+
+  const maxAvg = Math.max(...weekAvgs.map(w=>w.avg), 1);
+  document.getElementById('history-chart').innerHTML = `
+    <div style="font-size:12px;color:var(--text2);margin-bottom:6px">ממוצע שבועי</div>
+    <div style="display:flex;align-items:flex-end;gap:8px;height:80px">
+      ${weekAvgs.map(w=>`
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+          <div style="font-size:10px;color:var(--text2)">${w.avg.toFixed(1)}ש'</div>
+          <div style="width:100%;border-radius:3px 3px 0 0;background:${color(w.avg)};height:${Math.round(w.avg/maxAvg*60)}px"></div>
+          <div style="font-size:10px;color:var(--text2)">${w.week.slice(5)}</div>
+        </div>`).join('')}
+    </div>`;
+
+  // טבלה לפי שבוע
+  document.getElementById('history-list').innerHTML = weeks_sorted.map(w => {
+    const rows = byWeek[w];
+    const avg = rows.filter(r=>r.daily_average>0).reduce((a,r,i,arr)=>a+parseFloat(r.daily_average)/arr.length,0);
+    return `
+      <div style="margin-bottom:1rem">
+        <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:6px">שבוע ${w}</div>
+        ${rows.map(r=>`
+          <div class="student-row" style="padding:6px 0">
+            <div class="avatar" style="width:28px;height:28px;font-size:10px">${r.name?.slice(0,2)}</div>
+            <div style="flex:1;font-size:13px">${r.name}</div>
+            <div style="font-size:13px;color:var(--text2)">${r.class_name}</div>
+            <div style="font-size:13px;font-weight:500;min-width:40px;text-align:left">${r.daily_average>0?parseFloat(r.daily_average).toFixed(1)+"ש'":'—'}</div>
+          </div>`).join('')}
+        <div style="font-size:12px;color:var(--text2);margin-top:4px">ממוצע: ${avg.toFixed(1)}ש'</div>
+      </div>`;
+  }).join('');
 }
 
 function toggleStudent(id){
