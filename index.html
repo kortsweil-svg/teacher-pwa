@@ -135,6 +135,16 @@
   <main>
 
     <div id="screen-dashboard" class="screen active">
+      <!-- בחירת טווח תאריכים -->
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:1rem;flex-wrap:wrap">
+        <label style="font-size:13px;color:var(--text2)">מ:</label>
+        <input type="date" id="dash-from" style="padding:6px 10px;border:0.5px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:13px" onchange="renderDashboard()"/>
+        <label style="font-size:13px;color:var(--text2)">עד:</label>
+        <input type="date" id="dash-to" style="padding:6px 10px;border:0.5px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:13px" onchange="renderDashboard()"/>
+        <button class="btn" onclick="setDashRange('today')">היום</button>
+        <button class="btn" onclick="setDashRange('7d')">שבוע</button>
+        <button class="btn" onclick="setDashRange('30d')">חודש</button>
+      </div>
       <!-- קוד מוסד בולט -->
       <div class="card" style="border-color:rgba(24,95,165,0.3);background:var(--blue-bg)">
         <div style="font-size:12px;color:var(--blue);margin-bottom:4px">קוד המוסד — שתף עם התלמידים</div>
@@ -160,6 +170,16 @@
     </div>
 
     <div id="screen-students" class="screen">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:1rem;flex-wrap:wrap">
+        <label style="font-size:13px;color:var(--text2)">מ:</label>
+        <input type="date" id="students-from" style="padding:6px 10px;border:0.5px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:13px" onchange="renderStudents()"/>
+        <label style="font-size:13px;color:var(--text2)">עד:</label>
+        <input type="date" id="students-to" style="padding:6px 10px;border:0.5px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:13px" onchange="renderStudents()"/>
+        <button class="btn" onclick="setStudentsRange('today')">היום</button>
+        <button class="btn" onclick="setStudentsRange('7d')">שבוע</button>
+        <button class="btn" onclick="setStudentsRange('30d')">חודש</button>
+        <button class="btn" onclick="setStudentsRange('')">כל הזמן</button>
+      </div>
       <div class="card">
         <div class="toolbar">
           <div class="card-title" style="margin-bottom:0">תלמידים</div>
@@ -384,6 +404,32 @@ function showScreen(s){
   if(s==='manage') renderManage();
 }
 
+function getToday(){ return new Date().toISOString().split('T')[0]; }
+function getDaysAgo(n){ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString().split('T')[0]; }
+
+function setDashRange(r){
+  const from = document.getElementById('dash-from');
+  const to = document.getElementById('dash-to');
+  if(!from||!to) return;
+  to.value = getToday();
+  if(r==='today') from.value = getToday();
+  else if(r==='7d') from.value = getDaysAgo(7);
+  else if(r==='30d') from.value = getDaysAgo(30);
+  renderDashboard();
+}
+
+function setStudentsRange(r){
+  const from = document.getElementById('students-from');
+  const to = document.getElementById('students-to');
+  if(!from||!to) return;
+  to.value = getToday();
+  if(r==='today') from.value = getToday();
+  else if(r==='7d') from.value = getDaysAgo(7);
+  else if(r==='30d') from.value = getDaysAgo(30);
+  else { from.value=''; to.value=''; }
+  renderStudents();
+}
+
 function copyCode(){
   const code=localStorage.getItem('institution_code')||'';
   navigator.clipboard.writeText(code).then(()=>alert('קוד הועתק: '+code));
@@ -398,7 +444,14 @@ function shareCode(){
 
 async function renderDashboard(){
   document.getElementById('dash-metrics').innerHTML='<div style="color:var(--text2);font-size:13px">טוען...</div>';
-  const data=await api('/api/students');
+  const from = document.getElementById('dash-from')?.value;
+  const to = document.getElementById('dash-to')?.value;
+  let data;
+  if(from && to) {
+    data = await api('/api/students/range?from='+from+'&to='+to);
+  } else {
+    data = await api('/api/students');
+  }
   if(data.error){document.getElementById('dash-metrics').innerHTML='';return}
   const active=data.filter(s=>s.consent);
   const avg=active.length?(active.reduce((a,s)=>a+s.hours,0)/active.length):0;
@@ -456,7 +509,14 @@ let expandedStudentId = null;
 
 async function renderStudents(){
   document.getElementById('students-list').innerHTML='<div style="color:var(--text2);font-size:13px;padding:1rem 0">טוען...</div>';
-  const data=await api('/api/students');
+  const from = document.getElementById('students-from')?.value;
+  const to = document.getElementById('students-to')?.value;
+  let data;
+  if(from && to) {
+    data = await api('/api/students/range?from='+from+'&to='+to);
+  } else {
+    data = await api('/api/students');
+  }
   if(data.error){document.getElementById('students-list').innerHTML='';return}
   allStudentsData = data;
   const cls=document.getElementById('filter-class')?.value||'';
