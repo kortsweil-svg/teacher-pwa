@@ -543,7 +543,8 @@ function renderStudentsList(f){
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
             <div><span style="font-size:14px;font-weight:500">${s.name}</span>
             <span style="font-size:11px;color:var(--text2);margin-right:6px">${s.className}</span>
-            ${s.mood ? '<span style="font-size:16px;margin-right:4px">'+(s.mood==='good'?'😊':s.mood==='neutral'?'😐':'😟')+'</span>' : ''}</div>
+            ${s.mood ? '<span style="font-size:16px;margin-right:4px">'+(s.mood==='good'?'😊':s.mood==='neutral'?'😐':'😟')+'</span>' : ''}
+            ${s.sessionCount > 0 ? '<span style="font-size:10px;color:var(--text2);margin-right:4px">📱 '+s.sessionCount+' פתיחות</span>' : ''}</div>
             <div style="display:flex;gap:6px;align-items:center">
               ${badge(s.hours,s.consent)}
               <span style="font-size:13px;font-weight:500">${s.consent?s.hours.toFixed(1)+"ש'":'—'}</span>
@@ -571,24 +572,43 @@ function renderStudentDetail(s, avgHours){
 
   const appsHtml = (()=>{
     const blockList = ['launcher','signin','gms','systemui','packageinstaller','inputmethod','permissioncontroller','screentimestudent','com.android','android.settings','android.vending','google.settings','playconsole'];
-    const filtered = Object.entries(byApp)
-      .filter(([pkg]) => {
-        const p = pkg.toLowerCase();
-        const userApps = ['youtube','chrome','whatsapp','instagram','facebook','tiktok','snapchat','telegram','twitter','spotify','netflix','gmail','maps','photos','camera','gallery','music','podcast','games','browser','sbrowser'];
-        if(userApps.some(a => p.includes(a))) return true;
-        return !blockList.some(b => p.includes(b));
-      })
+    const socialNames = ['youtube','chrome','whatsapp','instagram','facebook','tiktok','snapchat','telegram','twitter','spotify','netflix','browser','sbrowser','discord','reddit','pinterest','linkedin','twitch','claude','chatgpt','gemini','firefox','opera','brave','edge'];
+    const isSocial = (pkg) => socialNames.some(a => pkg.toLowerCase().includes(a));
+
+    const allApps = Object.entries(byApp)
+      .filter(([pkg]) => !blockList.some(b => pkg.toLowerCase().includes(b)))
       .map(([pkg,mins]) => [pkg, Number(mins)])
       .filter(([,mins]) => mins > 0)
-      .sort((a,b) => Number(b[1])-Number(a[1]))
-      .slice(0,8);
-    if(!filtered.length) return '<div style="font-size:12px;color:var(--text2)">לא נמצאו אפליקציות משתמש</div>';
-    const appNames = {'android.youtube':'YouTube','android.chrome':'Chrome','com.whatsapp':'WhatsApp','com.instagram.android':'Instagram','com.facebook.katana':'Facebook','com.tiktok':'TikTok','android.googlequicksearchbox':'Google','app.sbrowser':'Samsung Browser'};
-    return filtered.map(([pkg,mins])=>{
-      const name = appNames[pkg] || pkg.split('.').slice(-1)[0];
-      const display = Number(mins) >= 60 ? (Number(mins)/60).toFixed(1)+"ש'" : Number(mins)+"ד'";
-      return `<div class="app-row"><span>${name}</span><span style="font-weight:500">${display}</span></div>`;
+      .sort((a,b) => Number(b[1])-Number(a[1]));
+
+    const socialApps = allApps.filter(([pkg]) => isSocial(pkg)).slice(0,8);
+    const otherApps = allApps.filter(([pkg]) => !isSocial(pkg));
+    const otherTotal = otherApps.reduce((a,[,v])=>a+Number(v),0);
+
+    const fmt = (m) => Number(m) >= 60 ? (Number(m)/60).toFixed(1)+"ש'" : Number(m)+"ד'";
+    const uid = 'other_'+s.id;
+
+    if(!socialApps.length && otherTotal === 0) return '<div style="font-size:12px;color:var(--text2)">לא נמצאו אפליקציות משתמש</div>';
+
+    const socialHtml = socialApps.map(([pkg,mins])=>{
+      const name = pkg.split('.').slice(-1)[0];
+      return `<div class="app-row"><span>${name}</span><span style="font-weight:500">${fmt(mins)}</span></div>`;
     }).join('');
+
+    const otherHtml = otherTotal > 0 ? `
+      <div style="border-top:0.5px solid var(--border);margin-top:6px;padding-top:6px">
+        <div class="app-row" style="cursor:pointer" onclick="toggleOther('${uid}')">
+          <span style="color:var(--text2);display:flex;align-items:center;gap:4px">
+            <span id="arrow_${uid}">▼</span> אפליקציות אחרות
+          </span>
+          <span style="font-weight:500;color:var(--text2)">${fmt(otherTotal)}</span>
+        </div>
+        <div id="${uid}" style="display:none;margin-top:4px">
+          ${otherApps.map(([pkg,mins])=>`<div class="app-row" style="font-size:12px;padding:3px 0"><span style="color:var(--text2)">${pkg.split('.').slice(-1)[0]}</span><span>${fmt(mins)}</span></div>`).join('')}
+        </div>
+      </div>` : '';
+
+    return socialHtml + otherHtml;
   })();
 
   const t2 = (typeof timing === 'string') ? JSON.parse(timing) : (timing||{});
@@ -618,6 +638,15 @@ function renderStudentDetail(s, avgHours){
       </div>
     </div>
   </div>`;
+}
+
+function toggleOther(uid) {
+  const el = document.getElementById(uid);
+  const arrow = document.getElementById('arrow_'+uid);
+  if (!el) return;
+  const isOpen = el.style.display !== 'none';
+  el.style.display = isOpen ? 'none' : 'block';
+  if (arrow) arrow.textContent = isOpen ? '▼' : '▲';
 }
 
 async function renderHistory(){
