@@ -544,7 +544,7 @@ function renderStudentsList(f){
             <div><span style="font-size:14px;font-weight:500">${s.name}</span>
             <span style="font-size:11px;color:var(--text2);margin-right:6px">${s.className}</span>
             ${s.mood ? '<span style="font-size:16px;margin-right:4px">'+(s.mood==='good'?'😊':s.mood==='neutral'?'😐':'😟')+'</span>' : ''}
-            ${s.sessionCount > 0 ? '<span style="font-size:10px;color:var(--text2);margin-right:4px">📱 '+s.sessionCount+' פתיחות</span>' : ''}</div>
+            ${s.sessionCount > 0 ? '<span style="font-size:10px;color:var(--text2);margin-right:4px">📱 '+s.sessionCount+' פתיחות | ממוצע '+(s.avgSessionSeconds>=60?Math.round(s.avgSessionSeconds/60)+"ד'":s.avgSessionSeconds+"ש''")+'/פתיחה</span>' : ''}</div>
             <div style="display:flex;gap:6px;align-items:center">
               ${badge(s.hours,s.consent)}
               <span style="font-size:13px;font-weight:500">${s.consent?s.hours.toFixed(1)+"ש'":'—'}</span>
