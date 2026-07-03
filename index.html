@@ -572,7 +572,7 @@ function renderStudentDetail(s, avgHours){
 
   const appsHtml = (()=>{
     const blockList = ['launcher','signin','gms','systemui','packageinstaller','inputmethod','permissioncontroller','screentimestudent','com.android','android.settings','android.vending','google.settings','playconsole'];
-    const socialNames = ['youtube','chrome','whatsapp','instagram','facebook','tiktok','snapchat','telegram','twitter','spotify','netflix','browser','sbrowser','discord','reddit','pinterest','linkedin','twitch','claude','chatgpt','gemini','firefox','opera','brave','edge'];
+    const socialNames = ['youtube','chrome','whatsapp','instagram','facebook','katana','tiktok','snapchat','telegram','twitter','spotify','netflix','browser','sbrowser','discord','reddit','pinterest','linkedin','twitch','claude','chatgpt','gemini','firefox','opera','brave','edge','messenger','orca'];
     const isSocial = (pkg) => socialNames.some(a => pkg.toLowerCase().includes(a));
 
     const allApps = Object.entries(byApp)
