@@ -506,11 +506,13 @@ async function renderDashboard(){
 
 let allStudentsData = [];
 let expandedStudentId = null;
+let isSingleDayView = false;
 
 async function renderStudents(){
   document.getElementById('students-list').innerHTML='<div style="color:var(--text2);font-size:13px;padding:1rem 0">טוען...</div>';
   const from = document.getElementById('students-from')?.value;
   const to = document.getElementById('students-to')?.value;
+  isSingleDayView = !!(from && to && from === to);
   let data;
   if(from && to) {
     data = await api('/api/students/range?from='+from+'&to='+to);
@@ -544,7 +546,7 @@ function renderStudentsList(f){
             <div><span style="font-size:14px;font-weight:500">${s.name}</span>
             <span style="font-size:11px;color:var(--text2);margin-right:6px">${s.className}</span>
             ${s.mood ? '<span style="font-size:16px;margin-right:4px">'+(s.mood==='good'?'😊':s.mood==='neutral'?'😐':'😟')+'</span>' : ''}
-            ${s.sessionCount > 0 ? '<span style="font-size:10px;color:var(--text2);margin-right:4px">📱 '+s.sessionCount+' פתיחות | ממוצע '+(s.avgSessionSeconds>=60?Math.round(s.avgSessionSeconds/60)+"ד'":s.avgSessionSeconds+"ש''")+'/פתיחה</span>' : ''}</div>
+            ${isSingleDayView && s.sessionCount > 0 ? '<span style="font-size:10px;color:var(--text2);margin-right:4px">📱 '+s.sessionCount+' פתיחות | ממוצע '+(s.avgSessionSeconds>=60?Math.round(s.avgSessionSeconds/60)+"ד'":s.avgSessionSeconds+"ש''")+'/פתיחה</span>' : ''}</div>
             <div style="display:flex;gap:6px;align-items:center">
               ${badge(s.hours,s.consent)}
               <span style="font-size:13px;font-weight:500">${s.consent?s.hours.toFixed(1)+"ש'":'—'}</span>
