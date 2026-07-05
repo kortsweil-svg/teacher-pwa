@@ -158,11 +158,6 @@
       </div>
       <div class="metric-grid" id="dash-metrics"></div>
       <div id="dash-alerts"></div>
-      <div class="card">
-        <div class="card-title">התפלגות זמן מסך</div>
-        <div class="card-sub">כל התלמידים — שבוע נוכחי</div>
-        <div class="week-chart" id="dist-chart"></div>
-      </div>
       <div class="card" style="margin-top:0">
         <div class="card-title">ממוצע לפי כיתה</div>
         <div id="class-breakdown"></div>
@@ -462,12 +457,6 @@ async function renderDashboard(){
     <div class="metric"><div class="metric-label">דורשים תשומת לב</div><div class="metric-val" style="color:var(--red)">${alerts.length}</div></div>`;
   document.getElementById('dash-alerts').innerHTML=alerts.map(s=>`
     <div class="alert-box"><strong>${s.name}</strong> — ${s.hours.toFixed(1)} שעות מסך ביום</div>`).join('');
-  const maxH=Math.max(...active.map(s=>s.hours),1);
-  document.getElementById('dist-chart').innerHTML=active.map(s=>`
-    <div class="week-col">
-      <div class="week-bar" style="height:${Math.round(s.hours/maxH*70)}px;background:${color(s.hours)}"></div>
-      <div class="week-lbl">${s.initials||s.name?.slice(0,2)}</div>
-    </div>`).join('');
 
   // התפלגות לפי כיתה
   const classes = {};
