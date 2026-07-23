@@ -182,9 +182,9 @@
             <select id="filter-class" onchange="renderStudents()"><option value="">כל הכיתות</option></select>
             <select id="filter-status" onchange="renderStudents()">
               <option value="">כל הסטטוסים</option>
-              <option value="high">גבוה (7+ש')</option>
-              <option value="medium">מתון (3-7ש')</option>
-              <option value="low">תקין (עד 3ש')</option>
+              <option value="low">דורש תשומת לב (ציון מתחת ל-50)</option>
+              <option value="medium">בינוני (50-74)</option>
+              <option value="high">מצוין (75+)</option>
               <option value="no-consent">ללא הסכמה</option>
             </select>
           </div>
@@ -248,6 +248,21 @@ const api=(path,method='GET',body=null)=>fetch(SERVER+path,{
 }).then(r=>r.json());
 
 function color(h){return h<3?'#3B6D11':h<6?'#854F0B':'#A32D2D'}
+// ── גרסה 6.0: הכל מבוסס ציון בריאות דיגיטלית ודגלים, לא שעות מסך ──
+function sc(s){ const v = (s.wellnessScore ?? s.avgWellnessScore); return (v===null||v===undefined)?null:Number(v); }
+function scoreColor(v){ return v==null?'#9AA0A6':v>=75?'#3B6D11':v>=50?'#854F0B':'#A32D2D' }
+function scoreBadge(v,consent){
+  if(!consent) return '<span class="badge badge-gray">ללא הסכמה</span>';
+  if(v==null) return '<span class="badge badge-gray">אין נתונים</span>';
+  return v>=75?'<span class="badge badge-green">מצוין</span>'
+       : v>=50?'<span class="badge badge-amber">בינוני</span>'
+       :       '<span class="badge badge-red">דורש תשומת לב</span>';
+}
+function flagPill(val,labelOn,labelOff){
+  if(val===null||val===undefined) return '<span class="badge badge-gray">'+labelOn+': אין נתונים</span>';
+  return val ? '<span class="badge badge-green">'+labelOn+'</span>'
+             : '<span class="badge badge-red">'+labelOff+'</span>';
+}
 function badge(h,consent){
   if(!consent) return '<span class="badge badge-gray">ללא הסכמה</span>';
   if(h<3) return '<span class="badge badge-green">תקין</span>';
@@ -448,22 +463,24 @@ async function renderDashboard(){
     data = await api('/api/students');
   }
   if(data.error){document.getElementById('dash-metrics').innerHTML='';return}
-  const active=data.filter(s=>s.consent);
-  const avg=active.length?(active.reduce((a,s)=>a+s.hours,0)/active.length):0;
-  const alerts=active.filter(s=>s.hours>=7);
+  const active=data.filter(s=>s.consent&&sc(s)!=null);
+  const avg=active.length?(active.reduce((a,s)=>a+sc(s),0)/active.length):0;
+  const metGoal=active.filter(s=>s.overallGoalPassed===true).length;
+  const alerts=active.filter(s=>sc(s)<50);
   document.getElementById('dash-metrics').innerHTML=`
     <div class="metric"><div class="metric-label">תלמידים רשומים</div><div class="metric-val">${data.length}</div></div>
-    <div class="metric"><div class="metric-label">ממוצע יומי</div><div class="metric-val">${avg.toFixed(1)}ש'</div></div>
+    <div class="metric"><div class="metric-label">ציון ממוצע</div><div class="metric-val">${active.length?Math.round(avg):'—'}</div></div>
+    <div class="metric"><div class="metric-label">עמדו ביעד</div><div class="metric-val" style="color:var(--green)">${metGoal}/${active.length}</div></div>
     <div class="metric"><div class="metric-label">דורשים תשומת לב</div><div class="metric-val" style="color:var(--red)">${alerts.length}</div></div>`;
   document.getElementById('dash-alerts').innerHTML=alerts.map(s=>`
-    <div class="alert-box"><strong>${s.name}</strong> — ${s.hours.toFixed(1)} שעות מסך ביום</div>`).join('');
+    <div class="alert-box"><strong>${s.name}</strong> — ציון ${Math.round(sc(s))}${s.overallGoalPassed===false?' · לא עמד ביעד':''}</div>`).join('');
 
   // התפלגות לפי כיתה
   const classes = {};
   data.forEach(s => {
     if (!classes[s.className]) classes[s.className] = {total:0, count:0, students:0};
     classes[s.className].students++;
-    if (s.consent && s.hours > 0) { classes[s.className].total += s.hours; classes[s.className].count++; }
+    if (s.consent && sc(s)!=null) { classes[s.className].total += sc(s); classes[s.className].count++; }
   });
   const classEl = document.getElementById('class-breakdown');
   if (classEl) {
@@ -472,7 +489,7 @@ async function renderDashboard(){
     classEl.innerHTML = `
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0;margin-bottom:4px">
         <div style="font-size:11px;color:var(--text2);padding:4px 0">כיתה</div>
-        <div style="font-size:11px;color:var(--text2);padding:4px 0;text-align:center">ממוצע</div>
+        <div style="font-size:11px;color:var(--text2);padding:4px 0;text-align:center">ציון ממוצע</div>
         <div style="font-size:11px;color:var(--text2);padding:4px 0;text-align:center">תלמידים</div>
         <div style="font-size:11px;color:var(--text2);padding:4px 0;text-align:center">סטטוס</div>
       </div>` +
@@ -480,12 +497,10 @@ async function renderDashboard(){
         const avg = d.count ? d.total/d.count : 0;
         const statusBadge = d.count === 0
           ? `<span class="badge badge-gray">אין נתונים</span>`
-          : avg < 3 ? `<span class="badge badge-green">תקין</span>`
-          : avg < 6 ? `<span class="badge badge-amber">מתון</span>`
-          : `<span class="badge badge-red">גבוה</span>`;
+          : scoreBadge(avg, true);
         return `<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0;padding:7px 0;border-top:0.5px solid var(--border)">
           <div style="font-size:14px;font-weight:500">${cls}</div>
-          <div style="font-size:13px;text-align:center">${d.count ? avg.toFixed(1)+"ש'" : "—"}</div>
+          <div style="font-size:13px;text-align:center;font-weight:600;color:${scoreColor(d.count?avg:null)}">${d.count ? Math.round(avg) : "—"}</div>
           <div style="font-size:13px;text-align:center;color:var(--text2)">${d.students}</div>
           <div style="text-align:center">${statusBadge}</div>
         </div>`;
@@ -517,15 +532,16 @@ async function renderStudents(){
   if(sel){const cur=sel.value;sel.innerHTML='<option value="">כל הכיתות</option>'+classes.map(c=>`<option value="${c}">${c}</option>`).join('');sel.value=cur}
   let f=data;
   if(cls) f=f.filter(s=>s.className===cls);
-  if(status==='high') f=f.filter(s=>s.consent&&s.hours>=7);
-  if(status==='medium') f=f.filter(s=>s.consent&&s.hours>=3&&s.hours<7);
-  if(status==='low') f=f.filter(s=>s.consent&&s.hours<3);
+  if(status==='high') f=f.filter(s=>s.consent&&sc(s)!=null&&sc(s)>=75);
+  if(status==='medium') f=f.filter(s=>s.consent&&sc(s)!=null&&sc(s)>=50&&sc(s)<75);
+  if(status==='low') f=f.filter(s=>s.consent&&sc(s)!=null&&sc(s)<50);
   if(status==='no-consent') f=f.filter(s=>!s.consent);
   renderStudentsList(f);
 }
 
 function renderStudentsList(f){
-  const avgHours = allStudentsData.filter(s=>s.consent&&s.hours>0).reduce((a,s,i,arr)=>a+s.hours/arr.length,0);
+  const scored = allStudentsData.filter(s=>s.consent&&sc(s)!=null);
+  const avgScore = scored.length ? scored.reduce((a,s)=>a+sc(s),0)/scored.length : 0;
   document.getElementById('students-list').innerHTML=f.length?f.map(s=>`
     <div class="student-row" style="flex-direction:column;align-items:stretch;cursor:pointer" onclick="toggleStudent('${s.id}')">
       <div style="display:flex;align-items:center;gap:12px">
@@ -535,97 +551,83 @@ function renderStudentsList(f){
             <div><span style="font-size:14px;font-weight:500">${s.name}</span>
             <span style="font-size:11px;color:var(--text2);margin-right:6px">${s.className}</span>
             ${s.mood ? '<span style="font-size:16px;margin-right:4px">'+(s.mood==='good'?'😊':s.mood==='neutral'?'😐':'😟')+'</span>' : ''}
-            ${isSingleDayView && s.sessionCount > 0 ? '<span style="font-size:10px;color:var(--text2);margin-right:4px">📱 '+s.sessionCount+' פתיחות | ממוצע '+(s.avgSessionSeconds>=60?Math.round(s.avgSessionSeconds/60)+"ד'":s.avgSessionSeconds+"ש''")+'/פתיחה</span>' : ''}</div>
+            ${s.currentStreak > 0 ? '<span style="font-size:11px;color:var(--text2);margin-right:5px">🔥 '+s.currentStreak+'</span>' : ''}</div>
             <div style="display:flex;gap:6px;align-items:center">
-              ${badge(s.hours,s.consent)}
-              <span style="font-size:13px;font-weight:500">${s.consent?s.hours.toFixed(1)+"ש'":'—'}</span>
+              ${scoreBadge(sc(s),s.consent)}
+              <span style="font-size:15px;font-weight:600;color:${scoreColor(sc(s))}">${s.consent&&sc(s)!=null?Math.round(sc(s)):'—'}</span>
               <span style="font-size:11px;color:var(--text2)">${expandedStudentId===s.id?'▲':'▼'}</span>
             </div>
           </div>
           ${s.consent
-            ?`<div class="bar-bg"><div class="bar-fill" style="width:${Math.min(100,Math.round(s.hours/12*100))}%;background:${color(s.hours)}"></div></div>`
+            ? (sc(s)!=null
+                ?`<div class="bar-bg"><div class="bar-fill" style="width:${Math.min(100,Math.round(sc(s)))}%;background:${scoreColor(sc(s))}"></div></div>`
+                :`<div style="font-size:12px;color:var(--text2)">אין עדיין נתונים</div>`)
             :`<div style="font-size:12px;color:var(--text2)">ממתין לאישור שיתוף</div>`}
           ${s.lastSync?`<div style="font-size:11px;color:var(--text2);margin-top:2px">סונכרן: ${new Date(s.lastSync).toLocaleString('he-IL')}</div>`:''}
         </div>
       </div>
-      ${expandedStudentId===s.id && s.consent ? renderStudentDetail(s, avgHours) : ''}
+      ${expandedStudentId===s.id && s.consent ? renderStudentDetail(s, avgScore) : ''}
     </div>`).join(''):'<div style="text-align:center;padding:2rem;color:var(--text2);font-size:14px">אין תלמידים עדיין</div>';
 }
 
-function renderStudentDetail(s, avgHours){
-  const consent = s.rawConsent || {};
-  const byApp = (typeof s.byApp === 'string') ? JSON.parse(s.byApp) : (s.byApp || {});
-  console.log('byApp for', s.name, ':', JSON.stringify(byApp));
-  const timing = (typeof s.timing === 'string') ? JSON.parse(s.timing) : (s.timing || {});
-  const diff = s.hours - avgHours;
-  const diffStr = diff > 0 ? `+${diff.toFixed(1)}ש' מעל הממוצע` : diff < 0 ? `${diff.toFixed(1)}ש' מתחת לממוצע` : 'בדיוק בממוצע';
-  const diffColor = diff > 1 ? 'var(--red)' : diff < -1 ? 'var(--green)' : 'var(--text2)';
+function renderStudentDetail(s, avgScore){
+  const v = sc(s);
+  const diff = (v==null) ? null : v - avgScore;
+  const diffStr = diff==null ? '—'
+    : diff > 0 ? `${Math.abs(Math.round(diff))} נקודות מעל ממוצע הכיתה`
+    : diff < 0 ? `${Math.abs(Math.round(diff))} נקודות מתחת לממוצע הכיתה`
+    : 'בדיוק בממוצע הכיתה';
+  const diffColor = diff==null ? 'var(--text2)' : diff >= 0 ? 'var(--green)' : 'var(--red)';
 
-  const appsHtml = (()=>{
-    const blockList = ['launcher','signin','gms','systemui','packageinstaller','inputmethod','permissioncontroller','screentimestudent','com.android','android.settings','android.vending','google.settings','playconsole'];
-    const socialNames = ['youtube','chrome','whatsapp','instagram','facebook','katana','tiktok','snapchat','telegram','twitter','spotify','netflix','browser','sbrowser','discord','reddit','pinterest','linkedin','twitch','claude','chatgpt','gemini','firefox','opera','brave','edge','messenger','orca'];
-    const isSocial = (pkg) => socialNames.some(a => pkg.toLowerCase().includes(a));
+  // תצוגת טווח תאריכים מחזירה סיכום ימים במקום יום בודד
+  const isRange = (s.daysCount !== undefined && s.daysCount !== null);
 
-    const allApps = Object.entries(byApp)
-      .filter(([pkg]) => !blockList.some(b => pkg.toLowerCase().includes(b)))
-      .map(([pkg,mins]) => [pkg, Number(mins)])
-      .filter(([,mins]) => mins > 0)
-      .sort((a,b) => Number(b[1])-Number(a[1]));
-
-    const socialApps = allApps.filter(([pkg]) => isSocial(pkg)).slice(0,8);
-    const otherApps = allApps.filter(([pkg]) => !isSocial(pkg));
-    const otherTotal = otherApps.reduce((a,[,v])=>a+Number(v),0);
-
-    const fmt = (m) => Number(m) >= 60 ? (Number(m)/60).toFixed(1)+"ש'" : Number(m)+"ד'";
-    const uid = 'other_'+s.id;
-
-    if(!socialApps.length && otherTotal === 0) return '<div style="font-size:12px;color:var(--text2)">לא נמצאו אפליקציות משתמש</div>';
-
-    const socialHtml = socialApps.map(([pkg,mins])=>{
-      const name = pkg.split('.').slice(-1)[0];
-      return `<div class="app-row"><span>${name}</span><span style="font-weight:500">${fmt(mins)}</span></div>`;
-    }).join('');
-
-    const otherHtml = otherTotal > 0 ? `
-      <div style="border-top:0.5px solid var(--border);margin-top:6px;padding-top:6px">
-        <div class="app-row" style="cursor:pointer" onclick="toggleOther('${uid}')">
-          <span style="color:var(--text2);display:flex;align-items:center;gap:4px">
-            <span id="arrow_${uid}">▼</span> אפליקציות אחרות
-          </span>
-          <span style="font-weight:500;color:var(--text2)">${fmt(otherTotal)}</span>
-        </div>
-        <div id="${uid}" style="display:none;margin-top:4px">
-          ${otherApps.map(([pkg,mins])=>`<div class="app-row" style="font-size:12px;padding:3px 0"><span style="color:var(--text2)">${pkg.split('.').slice(-1)[0]}</span><span>${fmt(mins)}</span></div>`).join('')}
-        </div>
-      </div>` : '';
-
-    return socialHtml + otherHtml;
-  })();
-
-  const t2 = (typeof timing === 'string') ? JSON.parse(timing) : (timing||{});
-  const timingHtml = `
+  const goalHtml = `
     <div class="time-grid">
-      <div class="time-block"><div class="time-lbl">בוקר</div><div class="time-val">${t2.morning||'—'}</div></div>
-      <div class="time-block"><div class="time-lbl">צהריים</div><div class="time-val">${t2.noon||'—'}</div></div>
-      <div class="time-block"><div class="time-lbl">ערב</div><div class="time-val">${t2.evening||'—'}</div></div>
-      <div class="time-block"><div class="time-lbl">לילה</div><div class="time-val">${t2.night||'—'}</div></div>
+      <div class="time-block">
+        <div class="time-lbl">יעד יומי</div>
+        <div class="time-val">${s.goalHours ? s.goalHours + "ש'" : '—'}</div>
+      </div>
+      <div class="time-block">
+        <div class="time-lbl">${isRange ? 'ימים שעמד ביעד' : 'עמד ביעד'}</div>
+        <div class="time-val">${isRange
+          ? (s.daysCount ? s.daysGoalPassed + '/' + s.daysCount : '—')
+          : (s.overallGoalPassed===true ? '✓' : s.overallGoalPassed===false ? '✗' : '—')}</div>
+      </div>
+      <div class="time-block">
+        <div class="time-lbl">רצף</div>
+        <div class="time-val">${s.currentStreak ? s.currentStreak : '—'}</div>
+      </div>
+      <div class="time-block">
+        <div class="time-lbl">ציון</div>
+        <div class="time-val" style="color:${scoreColor(v)}">${v!=null?Math.round(v):'—'}</div>
+      </div>
+    </div>`;
+
+  const flagsHtml = `
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${flagPill(s.nighttimePassed, 'לילה נקי', 'שימוש בלילה')}
+      ${flagPill(s.schoolHoursPassed, 'ניתוק בשעות לימודים', 'שימוש בשעות לימודים')}
+    </div>
+    <div style="font-size:11px;color:var(--text2);margin-top:6px">
+      לילה 19:00־07:30 · לימודים 07:30־13:30 · עד 30 דק׳ נחשב עמידה
     </div>`;
 
   return `<div class="student-detail" onclick="event.stopPropagation()">
     <div class="detail-card">
-      <div class="detail-card-title">אפליקציות מובילות</div>
-      ${appsHtml}
+      <div class="detail-card-title">יעד והישגים</div>
+      ${goalHtml}
     </div>
     <div class="detail-card">
-      <div class="detail-card-title">שעות שימוש</div>
-      ${timingHtml}
+      <div class="detail-card-title">חלונות זמן</div>
+      ${flagsHtml}
     </div>
     <div class="detail-card">
-      <div class="detail-card-title">השוואה לממוצע הכיתה (${avgHours.toFixed(1)}ש')</div>
+      <div class="detail-card-title">השוואה לממוצע הכיתה (${Math.round(avgScore)})</div>
       <div style="font-size:13px;color:${diffColor};font-weight:500">${diffStr}</div>
       <div style="display:flex;gap:4px;align-items:center;margin-top:6px">
-        <div style="height:6px;border-radius:3px;flex:${Math.min(s.hours/12,1)};background:${color(s.hours)}"></div>
-        <div style="height:6px;border-radius:3px;flex:${Math.max(0,1-s.hours/12)};background:var(--bg3)"></div>
+        <div style="height:6px;border-radius:3px;flex:${v!=null?Math.min(v/100,1):0};background:${scoreColor(v)}"></div>
+        <div style="height:6px;border-radius:3px;flex:${v!=null?Math.max(0,1-v/100):1};background:var(--bg3)"></div>
       </div>
     </div>
   </div>`;
@@ -673,19 +675,18 @@ async function renderHistory(){
 
   // גרף יומי
   const dateAvgs = dates_sorted.map(d => {
-    const r = byDate[d].filter(s=>s.daily_average>0);
-    const avg = r.length ? r.reduce((a,s)=>a+parseFloat(s.daily_average),0)/r.length : 0;
-    return {date:d, avg};
+    const r = byDate[d].filter(s=>s.wellness_score!=null);
+    const avg = r.length ? r.reduce((a,s)=>a+Number(s.wellness_score),0)/r.length : 0;
+    return {date:d, avg, n:r.length};
   }).reverse().slice(-14);
 
-  const maxAvg = Math.max(...dateAvgs.map(w=>w.avg), 1);
   document.getElementById('history-chart').innerHTML = dateAvgs.length > 1 ? `
-    <div style="font-size:12px;color:var(--text2);margin-bottom:6px">ממוצע יומי</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:6px">ציון בריאות דיגיטלית ממוצע</div>
     <div style="display:flex;align-items:flex-end;gap:4px;height:80px">
       ${dateAvgs.map(d=>`
         <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
-          <div style="font-size:9px;color:var(--text2)">${d.avg.toFixed(1)}</div>
-          <div style="width:100%;border-radius:3px 3px 0 0;background:${color(d.avg)};height:${Math.max(2,Math.round(d.avg/maxAvg*60))}px"></div>
+          <div style="font-size:9px;color:var(--text2)">${d.n?Math.round(d.avg):''}</div>
+          <div style="width:100%;border-radius:3px 3px 0 0;background:${d.n?scoreColor(d.avg):'var(--bg3)'};height:${d.n?Math.max(2,Math.round(d.avg/100*60)):2}px"></div>
           <div style="font-size:9px;color:var(--text2)">${d.date.slice(5)}</div>
         </div>`).join('')}
     </div>` : '';
@@ -693,19 +694,21 @@ async function renderHistory(){
   // טבלה לפי תאריך
   document.getElementById('history-list').innerHTML = dates_sorted.map(d => {
     const dayRows = byDate[d];
-    const avg = dayRows.filter(r=>r.daily_average>0).reduce((a,r,i,arr)=>a+parseFloat(r.daily_average)/arr.length,0);
+    const scoredRows = dayRows.filter(r=>r.wellness_score!=null);
+    const avg = scoredRows.length ? scoredRows.reduce((a,r)=>a+Number(r.wellness_score),0)/scoredRows.length : null;
     return `
       <div style="margin-bottom:.75rem">
         <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:4px;display:flex;justify-content:space-between">
           <span>${d}</span>
-          <span style="font-size:12px;color:var(--text2)">ממוצע: ${avg.toFixed(1)}ש'</span>
+          <span style="font-size:12px;color:var(--text2)">ציון ממוצע: ${avg!=null?Math.round(avg):'—'}</span>
         </div>
         ${dayRows.filter(r=>r.report_date).map(r=>`
           <div class="student-row" style="padding:5px 0">
             <div class="avatar" style="width:26px;height:26px;font-size:10px">${r.name?.slice(0,2)}</div>
             <div style="flex:1;font-size:13px">${r.name}</div>
             <div style="font-size:12px;color:var(--text2)">${r.class_name}</div>
-            <div style="font-size:13px;font-weight:500">${r.daily_average>0?parseFloat(r.daily_average).toFixed(1)+"ש'":'—'}</div>
+            <div style="font-size:12px;color:var(--text2)">${r.overall_goal_passed===true?'✓ יעד':r.overall_goal_passed===false?'✗ יעד':''}</div>
+            <div style="font-size:13px;font-weight:600;color:${scoreColor(r.wellness_score!=null?Number(r.wellness_score):null)}">${r.wellness_score!=null?Math.round(r.wellness_score):'—'}</div>
           </div>`).join('')}
       </div>`;
   }).join('');
@@ -717,9 +720,9 @@ function toggleStudent(id){
   const status=document.getElementById('filter-status')?.value||'';
   let f=allStudentsData;
   if(cls) f=f.filter(s=>s.className===cls);
-  if(status==='high') f=f.filter(s=>s.consent&&s.hours>=7);
-  if(status==='medium') f=f.filter(s=>s.consent&&s.hours>=3&&s.hours<7);
-  if(status==='low') f=f.filter(s=>s.consent&&s.hours<3);
+  if(status==='high') f=f.filter(s=>s.consent&&sc(s)!=null&&sc(s)>=75);
+  if(status==='medium') f=f.filter(s=>s.consent&&sc(s)!=null&&sc(s)>=50&&sc(s)<75);
+  if(status==='low') f=f.filter(s=>s.consent&&sc(s)!=null&&sc(s)<50);
   if(status==='no-consent') f=f.filter(s=>!s.consent);
   renderStudentsList(f);
 }
