@@ -173,6 +173,8 @@
           <span><span class="fl out">🔥</span> חרג</span>
           <span><span class="fl">⏳</span> היום</span>
           <span><span class="fl none">—</span> אין נתון</span>
+          <span>🥇🥈🥉⭐ כוכב שבועי (5 ימים ביעד)</span>
+          <span>🏆 גביע חודשי (4 כוכבי זהב/כסף/ארד)</span>
         </div>
       </div>
     </div>
@@ -433,6 +435,47 @@ function weekMet(s){
   }
   return {met, rep};
 }
+// כוכב: שבוע א'-ש' שהסתיים, לפחות 4 ימים מדודים ו-5 ימים ביעד.
+// צבע לפי היעד: 3ש' זהב, 4ש' כסף, 5ש' ארד, 6 ומעלה רגיל. השבוע שייך לחודש של יום השבת.
+// גביע: חודש עם 4 כוכבי זהב/כסף/ארד. כולם מאותו צבע = גביע בצבע הזה, אחרת משולב.
+const STAR_ICON = {gold:'🥇', silver:'🥈', bronze:'🥉', basic:'⭐'};
+const TROPHY_NAME = {gold:'זהב', silver:'כסף', bronze:'ארד', mixed:'משולב'};
+function starTypeFor(g){ return g===3?'gold':g===4?'silver':g===5?'bronze':g>=6?'basic':null; }
+function achievements(s){
+  if(s._ach) return s._ach;
+  const year = OV.today.slice(0,4);
+  const stars=[];
+  // השבת הראשונה של השנה, ומשם כל שבוע עד השבת האחרונה שהסתיימה
+  let sat = year+'-01-01';
+  while(new Date(sat+'T12:00:00Z').getUTCDay()!==6) sat=addDays(sat,1);
+  for(; sat < OV.today; sat=addDays(sat,7)){
+    let measured=0, met=0, goal=null;
+    for(let i=6;i>=0;i--){
+      const d=addDays(sat,-i);
+      const day=(s.days||[]).find(x=>x.date===d);
+      if(!day) continue;
+      const g=goalOf(s,day); if(!g) continue;
+      goal=g; measured++;
+      if(day.minutes<=g*60) met++;
+    }
+    const type=starTypeFor(goal);
+    if(type && measured>=4 && met>=5) stars.push({sat, type});
+  }
+  const trophies=[];
+  const months=[...new Set(stars.map(x=>x.sat.slice(0,7)))].sort();
+  for(const m of months){
+    const club=stars.filter(x=>x.sat.startsWith(m) && x.type!=='basic');
+    if(club.length>=4){
+      const t=['gold','silver','bronze'].find(c=>club.every(x=>x.type===c)) || 'mixed';
+      trophies.push({month:m, type:t});
+    }
+  }
+  const curMonth=OV.today.slice(0,7);
+  s._ach={stars, trophies, monthStars:stars.filter(x=>x.sat.startsWith(curMonth))};
+  return s._ach;
+}
+function starsHtml(list){ return list.length ? list.map(x=>STAR_ICON[x.type]).join('') : '<span class="muted">—</span>'; }
+
 function needsAttention(s){
   return !s.consent || !s.goalHours || daysSince(s.lastSync)===null || daysSince(s.lastSync)>=2;
 }
@@ -497,7 +540,7 @@ function renderWeek(){
   if(cls) list=list.filter(s=>s.className===cls);
   list.sort((a,b)=>(a.goalHours||99)-(b.goalHours||99) || weekMet(b).met-weekMet(a).met || a.name.localeCompare(b.name,'he'));
   const dates=[...Array(7)].map((_,i)=>addDays(OV.weekStart,i));
-  const head=`<tr><th class="name-h">תלמיד</th><th>יעד</th>${dates.map((d,i)=>`<th>${DAY_NAMES[i]}<br><span class="muted">${d.slice(8)}.${d.slice(5,7)}</span></th>`).join('')}<th>ביעד</th><th>דירוג</th></tr>`;
+  const head=`<tr><th class="name-h">תלמיד</th><th>יעד</th>${dates.map((d,i)=>`<th>${DAY_NAMES[i]}<br><span class="muted">${d.slice(8)}.${d.slice(5,7)}</span></th>`).join('')}<th>ביעד</th><th>דירוג</th><th>כוכבי החודש</th><th>גביעים השנה</th></tr>`;
   const rows=list.map(s=>{
     const wm=weekMet(s);
     const rank = s.rank ? `${s.rank}<span class="muted"> מתוך ${s.groupSize}</span>` : '<span class="muted">—</span>';
@@ -506,7 +549,9 @@ function renderWeek(){
       <td>${s.goalHours?s.goalHours+'ש\'':'<span class="muted">ללא</span>'}</td>
       ${dates.map(d=>`<td>${flame(dayInfo(s,d))}</td>`).join('')}
       <td><strong>${wm.met}</strong><span class="muted">/${wm.rep}</span></td>
-      <td>${rank}</td></tr>`;
+      <td>${rank}</td>
+      <td>${starsHtml(achievements(s).monthStars)}</td>
+      <td>${achievements(s).trophies.length ? '🏆'.repeat(achievements(s).trophies.length) : '<span class="muted">—</span>'}</td></tr>`;
   }).join('');
   document.getElementById('week-table').innerHTML = list.length
     ? `<table class="week-table">${head}${rows}</table>`
@@ -562,12 +607,14 @@ function studentDetail(s){
   }
   const grid = weeks.map(week=>{
     let met=0; for(const d of week){ if(dayInfo(s,d).kind==='met') met++; }
-    return `<div class="muted" style="margin-top:10px">שבוע ${week[0].slice(8)}.${week[0].slice(5,7)} — ${met} ימים ביעד${met>=5?' ⭐':''}</div>
+    const st = achievements(s).stars.find(x=>x.sat===week[6]);
+    return `<div class="muted" style="margin-top:10px">שבוע ${week[0].slice(8)}.${week[0].slice(5,7)} — ${met} ימים ביעד${st?' '+STAR_ICON[st.type]:''}</div>
       <div class="days-grid">${week.map((d,i)=>{ const inf=dayInfo(s,d);
         return `<div class="day-cell">${flame(inf)}${DAY_NAMES[i]} ${d.slice(8)}<br>${inf.minutes!=null?hm(inf.minutes):''}</div>`; }).join('')}</div>`;
   }).join('');
   return `<div style="margin-top:10px" onclick="event.stopPropagation()">
     <div class="muted">יעד: ${s.goalHours?s.goalHours+' שעות':'ללא'} · דירוג השבוע: ${s.rank?s.rank+' מתוך '+s.groupSize+' (יעד '+s.goalHours+'ש\')':'—'} · גרסה: ${esc(s.appVersion||'—')}</div>
+    <div class="muted" style="margin-top:6px">כוכבים השנה: ${achievements(s).stars.length} ${starsHtml(achievements(s).stars)} · גביעים: ${achievements(s).trophies.length ? achievements(s).trophies.map(t=>'🏆 '+TROPHY_NAME[t.type]+' ('+t.month.slice(5)+'/'+t.month.slice(2,4)+')').join(', ') : '—'}</div>
     ${grid}
   </div>`;
 }
