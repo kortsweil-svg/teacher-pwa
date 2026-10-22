@@ -244,10 +244,11 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
             <select id="filter-class" onchange="renderStudents()"><option value="">כל הכיתות</option></select>
             <select id="filter-status" onchange="renderStudents()">
               <option value="">כל התלמידים</option>
+              <option value="consent">שיתפו נתונים</option>
+              <option value="no-consent">לא שיתפו נתונים</option>
               <option value="attention">דורש תשומת לב</option>
               <option value="no-sync">לא סונכרן יומיים ויותר</option>
               <option value="no-goal">ללא יעד</option>
-              <option value="no-consent">ללא הסכמה</option>
             </select>
           </div>
         </div>
@@ -681,6 +682,14 @@ async function renderStudents(){
   if(status==='no-sync') f=f.filter(s=>daysSince(s.lastSync)===null||daysSince(s.lastSync)>=2);
   if(status==='no-goal') f=f.filter(s=>!s.goalHours);
   if(status==='no-consent') f=f.filter(s=>!s.consent);
+  if(status==='consent') f=f.filter(s=>s.consent);
+  // מספר התלמידים בכל אפשרות (לפי הכיתה שנבחרה)
+  const base = cls ? OV.students.filter(s=>s.className===cls) : OV.students;
+  const counts = { '':base.length, consent:base.filter(s=>s.consent).length, 'no-consent':base.filter(s=>!s.consent).length,
+    attention:base.filter(needsAttention).length, 'no-sync':base.filter(s=>daysSince(s.lastSync)===null||daysSince(s.lastSync)>=2).length,
+    'no-goal':base.filter(s=>!s.goalHours).length };
+  const sel=document.getElementById('filter-status');
+  if(sel) for(const o of sel.options){ o.textContent = o.textContent.replace(/ \(\d+\)$/,'') + ` (${counts[o.value] ?? 0})`; }
   document.getElementById('students-list').innerHTML = f.length ? f.map(studentRow).join('') : '<div class="muted" style="padding:.5rem 0">אין תלמידים</div>';
 }
 
