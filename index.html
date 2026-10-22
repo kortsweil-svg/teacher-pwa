@@ -427,7 +427,19 @@ async function submitAuth(){
   }catch(e){showError('לא ניתן להתחבר לשרת');btn.textContent=isReg?'הרשמה':'כניסה';btn.disabled=false}
 }
 
+// דופק כל 5 דקות כשהלוח פתוח ומוצג: החיבור נשאר "פעיל" וחוסם כניסה ממכשיר אחר.
+// אם השרת כבר לא מכיר את החיבור (מישהו אחר נכנס אחרי 30 דקות בלי שימוש) - חוזרים למסך הכניסה.
+let pingTimer=null;
+function startPing(){
+  if(pingTimer) clearInterval(pingTimer);
+  pingTimer=setInterval(async()=>{
+    if(document.visibilityState!=='visible' || !token) return;
+    try{ const r=await fetch(SERVER+'/api/teacher/ping',{headers:{'Authorization':'Bearer '+token}});
+      if(r.status===401){ clearInterval(pingTimer); alert('החיבור הסתיים. יש להיכנס מחדש.'); logout(); } }catch(_){}
+  }, 5*60*1000);
+}
 function enterApp(){
+  startPing();
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app-screen').style.display='block';
   document.getElementById('teacher-header').textContent=teacherName;
@@ -438,6 +450,8 @@ function enterApp(){
 }
 
 function logout(){
+  // משחררים את החשבון בשרת, כדי שמכשיר אחר יוכל להיכנס מיד
+  try{ if(token) api('/api/teacher/logout','POST').catch(()=>{}); }catch(_){}
   localStorage.removeItem('teacher_token');localStorage.removeItem('teacher_name');
   token=null;
   document.getElementById('auth-screen').style.display='flex';
@@ -767,7 +781,20 @@ if(token){
     .then(data=>{if(!data.error) enterApp(); else{token=null;localStorage.removeItem('teacher_token');}})
     .catch(()=>{});
 }
-setInterval(()=>{if(token&&document.getElementById('screen-dashboard').classList.contains('active')) renderDashboard();},120000);
+// ריענון אוטומטי: המסך הפעיל נטען מחדש כל 3 דקות כשהלוח מוצג, ומיד בחזרה ללוח
+// אחרי שהיה ברקע. מסך "ניהול" לא מתרענן, כדי לא למחוק טופס באמצע מילוי.
+const AUTO_REFRESH_MS = 3*60*1000;
+let lastRefresh = Date.now();
+function refreshActive(){
+  if(!token || document.visibilityState!=='visible') return;
+  lastRefresh = Date.now();
+  if(document.getElementById('screen-dashboard')?.classList.contains('active')) renderDashboard();
+  else if(document.getElementById('screen-students')?.classList.contains('active')) renderStudents();
+}
+setInterval(refreshActive, AUTO_REFRESH_MS);
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && Date.now()-lastRefresh > 60*1000) refreshActive();
+});
 </script>
 </body>
 </html>
