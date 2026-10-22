@@ -97,6 +97,18 @@
 .day-cell .fl{display:block;margin-bottom:2px}
 .muted{color:var(--text2);font-size:12px}
 
+
+.wk-list{display:flex;flex-direction:column;gap:8px}
+.wk-card{border:0.5px solid var(--border);border-radius:12px;padding:10px 10px 8px;background:var(--bg)}
+.wk-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}
+.wk-name{font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wk-score{font-size:15px;white-space:nowrap}
+.wk-days{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
+.wk-day{padding:4px 0;border-radius:8px;background:var(--bg2)}
+.wk-dn{font-size:11px;color:var(--text2)}
+.wk-dd{font-size:10px;color:var(--text2)}
+.wk-day .fl{font-size:16px;display:inline-block;margin:2px 0}
+.wk-foot{margin-top:8px;font-size:12px}
 /* ── מסך טלפון (אייפון 16e: 390 נק' רוחב) ── */
 body{-webkit-text-size-adjust:100%;padding-bottom:env(safe-area-inset-bottom)}
 header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
@@ -589,10 +601,27 @@ function renderWeek(){
       <td>${starsHtml(achievements(s).monthStars)}</td>
       <td>${achievements(s).trophies.length ? '🏆'.repeat(achievements(s).trophies.length) : '<span class="muted">—</span>'}</td></tr>`;
   }).join('');
-  document.getElementById('week-table').innerHTML = list.length
-    ? `<table class="week-table">${head}${rows}</table>`
-    : '<div class="muted" style="padding:1rem 0">אין תלמידים עם הסכמה עדיין</div>';
+  // בטלפון: כרטיס לכל תלמיד במקום טבלה רחבה (13 עמודות לא נכנסות ב-390 נק')
+  const mobile = window.matchMedia('(max-width:600px)').matches;
+  const cards = list.map(s=>{
+    const wm=weekMet(s), ach=achievements(s);
+    const rank = s.rank ? `דירוג ${s.rank}/${s.groupSize}` : '';
+    const goal = s.goalHours ? `יעד ${s.goalHours}ש'` : 'ללא יעד';
+    return `<div class="wk-card">
+      <div class="wk-top">
+        <div class="wk-name">${platformIcon(s.platform)} <strong>${esc(s.name)}</strong> <span class="muted">${esc(s.className)}</span></div>
+        <div class="wk-score"><strong>${wm.met}</strong><span class="muted">/${wm.rep} ביעד</span></div>
+      </div>
+      <div class="wk-days">${dates.map((d,i)=>`<div class="wk-day"><div class="wk-dn">${DAY_NAMES[i]}</div><div>${flame(dayInfo(s,d))}</div><div class="wk-dd">${+d.slice(8)}</div></div>`).join('')}</div>
+      <div class="wk-foot muted">${[goal, rank].filter(Boolean).join(' · ')}${ach.monthStars && ach.monthStars.length ? ' · '+starsHtml(ach.monthStars) : ''}${ach.trophies.length ? ' · '+'🏆'.repeat(ach.trophies.length) : ''}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('week-table').innerHTML = !list.length
+    ? '<div class="muted" style="padding:1rem 0">אין תלמידים עם הסכמה עדיין</div>'
+    : (mobile ? `<div class="wk-list">${cards}</div>` : `<table class="week-table">${head}${rows}</table>`);
 }
+// מעבר בין טלפון למחשב (סיבוב מסך / שינוי גודל חלון)
+window.matchMedia('(max-width:600px)').addEventListener?.('change', () => { try { renderWeek(); } catch(_){} });
 
 async function renderStudents(){
   document.getElementById('students-list').innerHTML='<div class="muted" style="padding:1rem 0">טוען...</div>';
