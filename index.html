@@ -639,7 +639,7 @@ function renderWeek(){
   const head=`<tr><th class="name-h">תלמיד</th><th>יעד</th>${dates.map((d,i)=>`<th>${DAY_NAMES[i]}<br><span class="muted">${d.slice(8)}.${d.slice(5,7)}</span></th>`).join('')}<th>ביעד</th><th>דירוג</th><th>כוכבי החודש</th><th>גביעים השנה</th></tr>`;
   const rows=list.map(s=>{
     const wm=weekMet(s);
-    const rank = s.rank ? `${s.rank}<span class="muted"> מתוך ${s.groupSize}</span>` : '<span class="muted">—</span>';
+    const rank = (s.rank && wm.rep > 0) ? `${s.rank}<span class="muted"> מתוך ${s.groupSize}</span>` : '<span class="muted">—</span>';
     return `<tr>
       <td class="name">${platformIcon(s.platform)} <strong>${esc(s.name)}</strong> <span class="muted">${esc(s.className)}</span></td>
       <td>${s.goalHours?s.goalHours+'ש\'':'<span class="muted">ללא</span>'}</td>
@@ -653,7 +653,7 @@ function renderWeek(){
   const mobile = window.matchMedia('(max-width:600px)').matches;
   const cards = list.map(s=>{
     const wm=weekMet(s), ach=achievements(s);
-    const rank = s.rank ? `דירוג ${s.rank}/${s.groupSize}` : '';
+    const rank = (s.rank && wm.rep > 0) ? `דירוג ${s.rank}/${s.groupSize}` : '';
     const goal = s.goalHours ? `יעד ${s.goalHours}ש'` : 'ללא יעד';
     return `<div class="wk-card">
       <div class="wk-top">
