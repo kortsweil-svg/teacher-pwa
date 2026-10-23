@@ -110,6 +110,9 @@
 .export-bar{display:flex;gap:8px;align-items:center;justify-content:flex-start;margin-top:10px;flex-wrap:wrap}
 .export-bar select{flex:0 1 auto}
 @media(max-width:600px){.export-bar{flex-direction:column;align-items:stretch}.export-bar .btn,.export-bar select{width:100%;font-size:16px;padding:10px}}
+
+.edit-box{flex-direction:column;gap:6px;margin-top:8px}
+.edit-box input{width:100%;font-size:16px;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text)}
 .wk-list{display:flex;flex-direction:column;gap:8px}
 .wk-card{border:0.5px solid var(--border);border-radius:12px;padding:10px 10px 8px;background:var(--bg)}
 .wk-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}
@@ -832,15 +835,43 @@ async function renderManage(){
   const data=await api('/api/students');
   if(!data.error){
     document.getElementById('manage-list').innerHTML=data.length?data.map(s=>`
-      <div class="student-row">
+      <div class="student-row" id="mrow-${s.id}">
         <div class="avatar">${esc(s.initials||s.name?.slice(0,2))}</div>
-        <div style="flex:1">
+        <div style="flex:1;min-width:0">
           <div style="font-size:14px;font-weight:500">${esc(s.name)}</div>
-          <div class="muted">${esc(s.className)} · ${s.consent?'אישר':'ממתין'}</div>
+          <div class="muted">${esc(normClass(s.className))} · ${s.consent?'אישר':'ממתין'}</div>
+          <div class="edit-box" id="edit-${s.id}" style="display:none">
+            <input type="text" id="en-${s.id}" value="${esc(s.name)}" placeholder="שם פרטי ושם משפחה"/>
+            <input type="text" id="ec-${s.id}" value="${esc(s.className||'')}" placeholder="כיתה (למשל יא1)"/>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-primary" onclick="saveStudent('${s.id}')">שמור</button>
+              <button class="btn" onclick="toggleEdit('${s.id}')">ביטול</button>
+            </div>
+            <div class="muted" id="emsg-${s.id}"></div>
+          </div>
         </div>
+        <button class="btn" style="font-size:13px" onclick="toggleEdit('${s.id}')">ערוך</button>
         <button class="btn btn-danger" style="font-size:13px" onclick="removeStudent('${s.id}')">הסר</button>
       </div>`).join(''):'<div class="muted" style="padding:.5rem 0">אין תלמידים עדיין</div>';
   }
+}
+
+// עריכת שם וכיתה של תלמיד
+function toggleEdit(id){
+  const box=document.getElementById('edit-'+id); if(!box) return;
+  box.style.display = box.style.display==='none' ? 'flex' : 'none';
+  if(box.style.display==='flex') document.getElementById('en-'+id)?.focus();
+}
+async function saveStudent(id){
+  const name=document.getElementById('en-'+id).value.trim();
+  const className=document.getElementById('ec-'+id).value.trim();
+  const msg=document.getElementById('emsg-'+id);
+  if(!name || !className){ msg.textContent='צריך שם וכיתה'; return; }
+  msg.textContent='שומר...';
+  const r=await api('/api/students/'+id,'PATCH',{name,className});
+  if(r.error){ msg.textContent='שגיאה: '+r.error; return; }
+  OV=null;            // הלשוניות האחרות ייטענו מחדש עם השם החדש
+  renderManage();
 }
 
 async function removeStudent(id){
