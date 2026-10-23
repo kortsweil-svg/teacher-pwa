@@ -106,6 +106,10 @@
 .att-row:last-child{border-bottom:none}
 .att-name{font-size:14px;margin-bottom:4px}
 .att-why{display:flex;flex-wrap:wrap;gap:4px}
+
+.export-bar{display:flex;gap:8px;align-items:center;justify-content:flex-start;margin-top:10px;flex-wrap:wrap}
+.export-bar select{flex:0 1 auto}
+@media(max-width:600px){.export-bar{flex-direction:column;align-items:stretch}.export-bar .btn,.export-bar select{width:100%;font-size:16px;padding:10px}}
 .wk-list{display:flex;flex-direction:column;gap:8px}
 .wk-card{border:0.5px solid var(--border);border-radius:12px;padding:10px 10px 8px;background:var(--bg)}
 .wk-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}
@@ -249,8 +253,18 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
               <option value="attention">דורש תשומת לב</option>
               <option value="no-sync">לא סונכרן יומיים ויותר</option>
               <option value="no-goal">ללא יעד</option>
+              <option value="nav-on">מסננים ניווט ותפילה</option>
+              <option value="nav-off">לא מסננים ניווט ותפילה</option>
             </select>
           </div>
+        </div>
+        <div class="export-bar">
+          <select id="export-range">
+            <option value="week">השבוע</option>
+            <option value="4w" selected>4 שבועות אחרונים</option>
+            <option value="all">מתחילת השנה</option>
+          </select>
+          <button class="btn" onclick="exportStudents()">⬇ ייצוא ל-Excel</button>
         </div>
         <div style="margin-top:1rem" id="students-list"></div>
       </div>
@@ -685,6 +699,63 @@ function renderWeek(){
 // מעבר בין טלפון למחשב (סיבוב מסך / שינוי גודל חלון)
 window.matchMedia('(max-width:600px)').addEventListener?.('change', () => { try { renderWeek(); } catch(_){} });
 
+// האם התלמיד מסנן ניווט ותפילה (תפילון) מזמן המסך
+function navLabel(s){
+  if(s.navExcluded===true) return s.platform==='android' ? 'לא נספרים (אוטומטי)' : 'לא נספרים ✓';
+  if(s.navExcluded===false) return s.platform==='ios' ? 'נספרים (לא הפעיל)' : 'נספרים (גרסה ישנה)';
+  return 'לא ידוע (צריך גרסה 6.70)';
+}
+function navCsv(s){ return s.navExcluded===true ? 'כן' : s.navExcluded===false ? 'לא' : 'לא ידוע'; }
+// התלמידים שמוצגים לפי הסינון במסך "תלמידים"
+function filteredStudents(){
+  const cls=document.getElementById('filter-class')?.value||'';
+  const status=document.getElementById('filter-status')?.value||'';
+  let f=OV.students;
+  if(cls) f=f.filter(s=>s.className===cls);
+  if(status==='attention') f=f.filter(needsAttention);
+  if(status==='no-sync') f=f.filter(s=>daysSince(s.lastSync)===null||daysSince(s.lastSync)>=2);
+  if(status==='no-goal') f=f.filter(s=>!s.goalHours);
+  if(status==='no-consent') f=f.filter(s=>!s.consent);
+  if(status==='consent') f=f.filter(s=>s.consent);
+  if(status==='nav-on') f=f.filter(s=>s.navExcluded===true);
+  if(status==='nav-off') f=f.filter(s=>s.navExcluded!==true);
+  return {list:f, cls};
+}
+
+// ייצוא לקובץ CSV שנפתח ב-Excel: שורה לכל תלמיד, עמודה לכל יום (דקות), וסיכום ימים ביעד
+async function exportStudents(){
+  if(!OV && !(await loadOverview())) return alert('אין נתונים לייצוא');
+  const {list, cls} = filteredStudents();
+  if(!list.length) return alert('אין תלמידים לייצוא בסינון הנוכחי');
+  const range = document.getElementById('export-range')?.value || '4w';
+  const end = addDays(OV.today, -1);                       // עד אתמול (היום עוד לא נסגר)
+  let start = range==='week' ? OV.weekStart : range==='all' ? OV.today.slice(0,4)+'-01-01' : addDays(OV.weekStart, -21);
+  if(range==='all'){ const first=Math.min(...OV.students.flatMap(s=>(s.days||[]).map(d=>+new Date(d.date)))); if(isFinite(first)) start=new Date(first).toISOString().slice(0,10); }
+  const dates=[]; for(let d=start; d<=end; d=addDays(d,1)) dates.push(d);
+  const hm = m => m==null ? '' : `${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}`;
+  const q = v => { const t=String(v??''); return /[",\n]/.test(t) ? '"'+t.replace(/"/g,'""')+'"' : t; };
+  const head = ['שם','כיתה','מכשיר','יעד (שעות)','שיתף נתונים','מסנן ניווט ותפילה','סנכרון אחרון','ימים עם נתונים','ימים ביעד',
+    ...dates.map(d=>`${DAY_NAMES[new Date(d+'T12:00:00Z').getUTCDay()]} ${d.slice(8)}.${d.slice(5,7)}`)];
+  const rows = list.map(s=>{
+    let rep=0, met=0;
+    const cells = dates.map(d=>{
+      const info=dayInfo(s,d);
+      if(info.minutes==null) return '';
+      rep++; if(info.kind==='met') met++;
+      return hm(info.minutes);
+    });
+    return [s.name, s.className, s.platform==='ios'?'אייפון':s.platform==='android'?'אנדרואיד':'', s.goalHours||'',
+      s.consent?'כן':'לא', navCsv(s), s.lastSync ? new Date(s.lastSync).toLocaleString('he-IL') : '', rep, met, ...cells];
+  });
+  const csv = '\uFEFF' + [head, ...rows].map(r=>r.map(q).join(',')).join('\r\n');   // BOM: עברית תקינה ב-Excel
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const name = `זמן-מסך_${cls||'כל-הכיתות'}_${start}_${end}.csv`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+}
+
 async function renderStudents(){
   document.getElementById('students-list').innerHTML='<div class="muted" style="padding:1rem 0">טוען...</div>';
   if(!(await loadOverview())){ document.getElementById('students-list').innerHTML=''; return; }
@@ -697,11 +768,14 @@ async function renderStudents(){
   if(status==='no-goal') f=f.filter(s=>!s.goalHours);
   if(status==='no-consent') f=f.filter(s=>!s.consent);
   if(status==='consent') f=f.filter(s=>s.consent);
+  if(status==='nav-on') f=f.filter(s=>s.navExcluded===true);
+  if(status==='nav-off') f=f.filter(s=>s.navExcluded!==true);
   // מספר התלמידים בכל אפשרות (לפי הכיתה שנבחרה)
   const base = cls ? OV.students.filter(s=>s.className===cls) : OV.students;
   const counts = { '':base.length, consent:base.filter(s=>s.consent).length, 'no-consent':base.filter(s=>!s.consent).length,
     attention:base.filter(needsAttention).length, 'no-sync':base.filter(s=>daysSince(s.lastSync)===null||daysSince(s.lastSync)>=2).length,
-    'no-goal':base.filter(s=>!s.goalHours).length };
+    'no-goal':base.filter(s=>!s.goalHours).length,
+    'nav-on':base.filter(s=>s.navExcluded===true).length, 'nav-off':base.filter(s=>s.navExcluded!==true).length };
   const sel=document.getElementById('filter-status');
   if(sel) for(const o of sel.options){ o.textContent = o.textContent.replace(/ \(\d+\)$/,'') + ` (${counts[o.value] ?? 0})`; }
   document.getElementById('students-list').innerHTML = f.length ? f.map(studentRow).join('') : '<div class="muted" style="padding:.5rem 0">אין תלמידים</div>';
@@ -748,7 +822,7 @@ function studentDetail(s){
         return `<div class="day-cell">${flame(inf)}${DAY_NAMES[i]} ${d.slice(8)}<br>${inf.minutes!=null?hm(inf.minutes):''}</div>`; }).join('')}</div>`;
   }).join('');
   return `<div style="margin-top:10px" onclick="event.stopPropagation()">
-    <div class="muted">יעד: ${s.goalHours?s.goalHours+' שעות':'ללא'} · דירוג השבוע: ${s.rank?s.rank+' מתוך '+s.groupSize+' (יעד '+s.goalHours+'ש\')':'—'} · גרסה: ${esc(s.appVersion||'—')}</div>
+    <div class="muted">יעד: ${s.goalHours?s.goalHours+' שעות':'ללא'} · דירוג השבוע: ${s.rank?s.rank+' מתוך '+s.groupSize+' (יעד '+s.goalHours+'ש\')':'—'} · גרסה: ${esc(s.appVersion||'—')} · ניווט ותפילה: ${navLabel(s)}</div>
     <div class="muted" style="margin-top:6px">כוכבים השנה: ${achievements(s).stars.length} ${starsHtml(achievements(s).stars)} · גביעים: ${achievements(s).trophies.length ? achievements(s).trophies.map(t=>'🏆 '+TROPHY_NAME[t.type]+' ('+t.month.slice(5)+'/'+t.month.slice(2,4)+')').join(', ') : '—'}</div>
     ${grid}
   </div>`;
