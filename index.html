@@ -471,6 +471,13 @@ function logout(){
   try{ if(token) api('/api/teacher/logout','POST').catch(()=>{}); }catch(_){}
   localStorage.removeItem('teacher_token');localStorage.removeItem('teacher_name');
   token=null;
+  if(pingTimer){ clearInterval(pingTimer); pingTimer=null; }
+  // כפתור הכניסה נשאר "..." ונעול מהכניסה הקודמת - מחזירים אותו למצב רגיל
+  const btn=document.getElementById('auth-submit');
+  if(btn){ btn.disabled=false; btn.textContent=isReg?'הרשמה':'כניסה'; }
+  const pw=document.getElementById('auth-password'); if(pw) pw.value='';
+  const er=document.getElementById('auth-error'); if(er) er.style.display='none';
+  OV=null;
   document.getElementById('auth-screen').style.display='flex';
   document.getElementById('app-screen').style.display='none';
 }
