@@ -285,6 +285,18 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
     </div>
 
     <div id="screen-manage" class="screen">
+      <div class="card" id="staff-card" style="display:none">
+        <div class="card-title">משתמשי צוות</div>
+        <div class="card-sub">אנשים נוספים (מנהל, מחנך, יועץ) שרואים את אותו לוח, כל אחד עם שם משתמש וסיסמה משלו</div>
+        <div id="staff-list" class="muted">טוען...</div>
+        <div class="edit-box" style="display:flex;margin-top:10px">
+          <input type="text" id="staff-name" placeholder="שם (למשל: הרב יאיר)"/>
+          <input type="text" id="staff-user" placeholder="שם משתמש" autocapitalize="none" autocorrect="off"/>
+          <input type="text" id="staff-pass" placeholder="סיסמה (4 תווים לפחות)" autocapitalize="none" autocorrect="off"/>
+          <button class="btn btn-primary" onclick="addStaff()">הוסף משתמש</button>
+          <div class="muted" id="staff-msg"></div>
+        </div>
+      </div>
       <div class="card" id="access-card">
         <div class="card-title">מי צפה בלוח</div>
         <div class="card-sub">כניסות וצפיות ב-60 הימים האחרונים</div>
@@ -456,6 +468,7 @@ async function submitAuth(){
     localStorage.setItem('teacher_token',token);
     localStorage.setItem('teacher_name',teacherName);
     localStorage.setItem('institution_code',institutionCode);
+    localStorage.setItem('is_staff', data.teacher.isStaff ? '1' : '0');
     enterApp();
   }catch(e){showError('לא ניתן להתחבר לשרת');btn.textContent=isReg?'הרשמה':'כניסה';btn.disabled=false}
 }
@@ -485,7 +498,7 @@ function enterApp(){
 function logout(){
   // משחררים את החשבון בשרת, כדי שמכשיר אחר יוכל להיכנס מיד
   try{ if(token) api('/api/teacher/logout','POST').catch(()=>{}); }catch(_){}
-  localStorage.removeItem('teacher_token');localStorage.removeItem('teacher_name');
+  localStorage.removeItem('teacher_token');localStorage.removeItem('teacher_name');localStorage.removeItem('is_staff');
   token=null;
   if(pingTimer){ clearInterval(pingTimer); pingTimer=null; }
   // כפתור הכניסה נשאר "..." ונעול מהכניסה הקודמת - מחזירים אותו למצב רגיל
@@ -895,8 +908,40 @@ async function renderAccess(){
   }).join('');
 }
 
+async function renderStaff(){
+  const card=document.getElementById('staff-card'); if(!card) return;
+  if(localStorage.getItem('is_staff')==='1'){ card.style.display='none'; return; }   // רק בעל החשבון
+  card.style.display='block';
+  const el=document.getElementById('staff-list');
+  const r=await api('/api/teacher/staff');
+  if(r.error){ el.textContent=r.error; return; }
+  el.innerHTML = r.staff.length ? r.staff.map(u=>`<div class="acc-row">
+      <strong>${esc(u.name||'')}</strong> <span class="muted">שם משתמש: ${esc(u.username)}</span>
+      <button class="btn btn-danger" style="font-size:12px;margin-right:auto" onclick="removeStaff('${u.id}','${esc(u.name||u.username)}')">הסר</button>
+    </div>`).join('') : 'עוד אין משתמשי צוות.';
+}
+async function addStaff(){
+  const name=document.getElementById('staff-name').value.trim();
+  const username=document.getElementById('staff-user').value.trim();
+  const password=document.getElementById('staff-pass').value;
+  const msg=document.getElementById('staff-msg');
+  if(!name||!username||password.length<4){ msg.textContent='צריך שם, שם משתמש וסיסמה (4 תווים לפחות)'; return; }
+  msg.textContent='שומר...';
+  const r=await api('/api/teacher/staff','POST',{name,username,password});
+  if(r.error){ msg.textContent='שגיאה: '+r.error; return; }
+  msg.textContent=`✓ נוסף. פרטי הכניסה ל${name}: שם משתמש "${username}", סיסמה "${password}"`;
+  ['staff-name','staff-user','staff-pass'].forEach(id=>document.getElementById(id).value='');
+  renderStaff();
+}
+async function removeStaff(id,name){
+  if(!confirm(`להסיר את ${name}? הוא לא יוכל להיכנס יותר ללוח.`)) return;
+  await api('/api/teacher/staff/'+id,'DELETE');
+  renderStaff();
+}
+
 async function renderManage(){
   renderAccess();
+  renderStaff();
   const data=await api('/api/students');
   if(!data.error){
     document.getElementById('manage-list').innerHTML=data.length?data.map(s=>`
