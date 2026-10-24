@@ -116,6 +116,13 @@
 
 .ver-ok{color:var(--text2)}
 .ver-old{color:var(--red);font-weight:600}
+
+.badge-blue{background:var(--blue-bg);color:var(--blue)}
+.acc-row .badge:not(.badge-blue){background:var(--bg2);color:var(--text2)}
+.acc-row{padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.acc-row:last-child{border-bottom:none}
+.acc-when{font-variant-numeric:tabular-nums;color:var(--text2);min-width:92px}
+#access-log{max-height:320px;overflow-y:auto}
 .wk-list{display:flex;flex-direction:column;gap:8px}
 .wk-card{border:0.5px solid var(--border);border-radius:12px;padding:10px 10px 8px;background:var(--bg)}
 .wk-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}
@@ -278,6 +285,11 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
     </div>
 
     <div id="screen-manage" class="screen">
+      <div class="card" id="access-card">
+        <div class="card-title">מי צפה בלוח</div>
+        <div class="card-sub">כניסות וצפיות ב-60 הימים האחרונים</div>
+        <div id="access-log" class="muted">טוען...</div>
+      </div>
       <div class="card">
         <div class="card-title">קוד המוסד</div>
         <div class="card-sub">שתף קוד אחד עם כל התלמידים — כל אחד יירשם בעצמו</div>
@@ -861,7 +873,30 @@ function studentDetail(s){
   </div>`;
 }
 
+// מכשיר ודפדפן, מתוך פרטי הדפדפן שנשמרו
+function deviceName(ua){
+  ua=String(ua||'');
+  const dev = /iPhone/.test(ua)?'אייפון' : /iPad/.test(ua)?'אייפד' : /Android/.test(ua)?'אנדרואיד'
+    : /Macintosh|Mac OS X/.test(ua)?'מק' : /Windows/.test(ua)?'Windows' : 'מכשיר אחר';
+  const br = /Edg\//.test(ua)?'Edge' : /CriOS|Chrome\//.test(ua)?'Chrome' : /FxiOS|Firefox\//.test(ua)?'Firefox'
+    : /Safari\//.test(ua)?'Safari' : '';
+  return br ? `${dev} · ${br}` : dev;
+}
+async function renderAccess(){
+  const el=document.getElementById('access-log'); if(!el) return;
+  const r=await api('/api/teacher/access');
+  if(r.error||!r.entries){ el.textContent='לא ניתן לטעון את היומן'; return; }
+  if(!r.entries.length){ el.textContent='עוד אין רשומות.'; return; }
+  el.innerHTML = r.entries.map(e=>{
+    const t=new Date(e.at.endsWith('Z')?e.at:e.at+'Z');   // השרת שומר ב-UTC
+    const when=t.toLocaleString('he-IL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const what = e.event==='login' ? '<span class="badge badge-blue">כניסה</span>' : '<span class="badge">צפייה</span>';
+    return `<div class="acc-row"><span class="acc-when">${when}</span> ${what} <strong>${esc(e.username||'')}</strong> <span class="muted">${esc(deviceName(e.user_agent))}</span></div>`;
+  }).join('');
+}
+
 async function renderManage(){
+  renderAccess();
   const data=await api('/api/students');
   if(!data.error){
     document.getElementById('manage-list').innerHTML=data.length?data.map(s=>`
