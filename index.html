@@ -123,6 +123,8 @@
 .acc-row:last-child{border-bottom:none}
 .acc-when{font-variant-numeric:tabular-nums;color:var(--text2);min-width:92px}
 #access-log{max-height:320px;overflow-y:auto}
+
+.danger-card{border-color:var(--red)}
 .wk-list{display:flex;flex-direction:column;gap:8px}
 .wk-card{border:0.5px solid var(--border);border-radius:12px;padding:10px 10px 8px;background:var(--bg)}
 .wk-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}
@@ -314,6 +316,17 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
       <div class="card">
         <div class="card-title">ניהול תלמידים</div>
         <div id="manage-list"></div>
+      </div>
+      <div class="card danger-card" id="danger-card" style="display:none">
+        <div class="card-title" style="color:var(--red)">מחיקת המרחב</div>
+        <div class="card-sub">מוחק לצמיתות את החשבון הזה, את כל התלמידים שנרשמו אליו, את כל הנתונים שלהם ואת משתמשי הצוות. אי אפשר לבטל.</div>
+        <button class="btn btn-danger" onclick="document.getElementById('danger-form').style.display='flex';this.style.display='none'">מחק את המרחב...</button>
+        <div class="edit-box" id="danger-form" style="display:none">
+          <input type="password" id="del-pass" placeholder="הסיסמה של החשבון"/>
+          <input type="text" id="del-code" placeholder="הקלד את קוד המוסד לאישור" inputmode="numeric"/>
+          <button class="btn btn-danger" onclick="deleteSpace()">מחק לצמיתות</button>
+          <div class="muted" id="del-msg"></div>
+        </div>
       </div>
     </div>
 
@@ -939,9 +952,26 @@ async function removeStaff(id,name){
   renderStaff();
 }
 
+async function deleteSpace(){
+  const password=document.getElementById('del-pass').value;
+  const confirmCode=document.getElementById('del-code').value.trim();
+  const msg=document.getElementById('del-msg');
+  if(!password||!confirmCode){ msg.textContent='צריך סיסמה וקוד מוסד'; return; }
+  if(!confirm('למחוק לצמיתות את המרחב, כל התלמידים וכל הנתונים? אי אפשר לבטל.')) return;
+  msg.textContent='מוחק...';
+  const r=await api('/api/teacher/delete-space','POST',{password,confirmCode});
+  if(r.error){ msg.textContent='שגיאה: '+r.error; return; }
+  alert('המרחב נמחק.');
+  localStorage.removeItem('institution_code');
+  logout();
+}
+
 async function renderManage(){
   renderAccess();
   renderStaff();
+  // מחיקת מרחב - רק לבעל החשבון
+  const dc=document.getElementById('danger-card');
+  if(dc) dc.style.display = localStorage.getItem('is_staff')==='1' ? 'none' : 'block';
   const data=await api('/api/students');
   if(!data.error){
     document.getElementById('manage-list').innerHTML=data.length?data.map(s=>`
