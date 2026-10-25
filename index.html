@@ -125,6 +125,10 @@
 #access-log{max-height:320px;overflow-y:auto}
 
 .danger-card{border-color:var(--red)}
+
+.week-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:.75rem}
+.week-nav .btn{font-size:13px;padding:6px 10px}
+.week-nav .btn:disabled{opacity:.35;cursor:default}
 .wk-list{display:flex;flex-direction:column;gap:8px}
 .wk-card{border:0.5px solid var(--border);border-radius:12px;padding:10px 10px 8px;background:var(--bg)}
 .wk-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}
@@ -240,7 +244,7 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
       <div id="attention-list" class="card" style="display:none"></div>
       <div class="card">
         <div class="toolbar">
-          <div class="card-title" style="margin-bottom:0">עמידה ביעד השבוע</div>
+          <div class="card-title" style="margin-bottom:0" id="week-title">עמידה ביעד השבוע</div>
           <select id="dash-class" onchange="renderWeek()"><option value="">כל הכיתות</option></select>
           <select id="rank-mode" onchange="renderWeek()">
             <option value="week">דירוג: השבוע</option>
@@ -248,7 +252,12 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
             <option value="ever">דירוג: מאז ומעולם</option>
           </select>
         </div>
-        <div class="tbl-wrap" style="margin-top:.75rem"><div id="week-table"></div></div>
+        <div class="week-nav">
+          <button class="btn" onclick="shiftWeek(1)">→ שבוע קודם</button>
+          <span id="week-range" class="muted"></span>
+          <button class="btn" id="week-next" onclick="shiftWeek(-1)">שבוע הבא ←</button>
+        </div>
+        <div class="tbl-wrap" style="margin-top:.5rem"><div id="week-table"></div></div>
         <div class="legend">
           <span><span class="fl">🔥</span> עמד ביעד</span>
           <span><span class="fl out">🔥</span> חרג</span>
@@ -717,12 +726,21 @@ async function renderDashboard(){
 
 // ─── דירוג לפי תקופה: השבוע / החודש / מאז ומעולם ───
 // בתוך קבוצת היעד הנוכחית, רק בין תלמידים עם יום נתונים אחד לפחות בתקופה, ומשלושה תלמידים ומעלה.
+// השבוע שמוצג בטבלה: 0 = השבוע הנוכחי, 1 = שבוע קודם, וכן הלאה
+let weekOffset = 0;
+function shownWeekStart(){ return OV ? addDays(OV.weekStart, -7*weekOffset) : null; }
+function shiftWeek(n){
+  if(!OV) return;
+  weekOffset = Math.max(0, weekOffset + n);
+  renderWeek();
+}
 function periodMet(s, mode){
   const end = addDays(OV.today,-1);
+  const ws = shownWeekStart(), we = addDays(ws, 6);
   let met=0, rep=0;
   for(const d of (s.days||[])){
     if(d.date > end) continue;
-    if(mode==='week' && d.date < OV.weekStart) continue;
+    if(mode==='week' && (d.date < ws || d.date > we)) continue;
     if(mode==='month' && d.date.slice(0,7) !== OV.today.slice(0,7)) continue;
     const k = dayInfo(s,d.date).kind;
     if(k==='met'||k==='out') rep++;
@@ -746,6 +764,7 @@ function periodRanks(students, mode){
   return out;
 }
 const RANK_LABEL = { week:'השבוע', month:'החודש', ever:'מאז ומעולם' };
+function weekWord(){ return weekOffset===0 ? 'השבוע' : weekOffset===1 ? 'שבוע שעבר' : `לפני ${weekOffset} שבועות`; }
 
 function renderWeek(){
   if(!OV) return;
@@ -755,8 +774,17 @@ function renderWeek(){
   const mode=document.getElementById('rank-mode')?.value||'week';
   const PR=periodRanks(OV.students.filter(s=>s.consent), mode);
   list.sort((a,b)=>(a.goalHours||99)-(b.goalHours||99) || PR[b.id].met-PR[a.id].met || a.name.localeCompare(b.name,'he'));
-  const dates=[...Array(7)].map((_,i)=>addDays(OV.weekStart,i));
-  const head=`<tr><th class="name-h">תלמיד</th><th>יעד</th>${dates.map((d,i)=>`<th>${DAY_NAMES[i]}<br><span class="muted">${d.slice(8)}.${d.slice(5,7)}</span></th>`).join('')}<th>ביעד<br><span class="muted">${RANK_LABEL[mode]}</span></th><th>דירוג<br><span class="muted">${RANK_LABEL[mode]}</span></th><th>כוכבי החודש</th><th>גביעים השנה</th><th>גרסה</th></tr>`;
+  const ws=shownWeekStart();
+  const dates=[...Array(7)].map((_,i)=>addDays(ws,i));
+  const fmtD=d=>`${+d.slice(8)}.${+d.slice(5,7)}`;
+  document.getElementById('week-title').textContent = weekOffset===0 ? 'עמידה ביעד השבוע' : `עמידה ביעד – ${weekWord()}`;
+  document.getElementById('week-range').textContent = `${fmtD(dates[0])}–${fmtD(dates[6])}`;
+  const nb=document.getElementById('week-next'); if(nb) nb.disabled = weekOffset===0;
+  // לא גוללים לפני היום הראשון שיש עליו נתונים
+  const first = OV.students.flatMap(x=>(x.days||[]).map(d=>d.date)).sort()[0];
+  const pb=document.querySelector('.week-nav .btn'); if(pb) pb.disabled = !first || ws <= first;
+  const wkLabel = mode==='week' ? weekWord() : RANK_LABEL[mode];
+  const head=`<tr><th class="name-h">תלמיד</th><th>יעד</th>${dates.map((d,i)=>`<th>${DAY_NAMES[i]}<br><span class="muted">${d.slice(8)}.${d.slice(5,7)}</span></th>`).join('')}<th>ביעד<br><span class="muted">${wkLabel}</span></th><th>דירוג<br><span class="muted">${wkLabel}</span></th><th>כוכבי החודש</th><th>גביעים השנה</th><th>גרסה</th></tr>`;
   const rows=list.map(s=>{
     const wm=PR[s.id];
     const rank = wm.rank ? `${wm.rank}<span class="muted"> מתוך ${wm.size}</span>` : '<span class="muted">—</span>';
@@ -774,12 +802,12 @@ function renderWeek(){
   const mobile = window.matchMedia('(max-width:600px)').matches;
   const cards = list.map(s=>{
     const wm=PR[s.id], ach=achievements(s);
-    const rank = wm.rank ? `דירוג ${RANK_LABEL[mode]} ${wm.rank}/${wm.size}` : '';
+    const rank = wm.rank ? `דירוג ${wkLabel} ${wm.rank}/${wm.size}` : '';
     const goal = s.goalHours ? `יעד ${s.goalHours}ש'` : 'ללא יעד';
     return `<div class="wk-card">
       <div class="wk-top">
         <div class="wk-name">${platformIcon(s.platform)} <strong>${esc(s.name)}</strong> <span class="muted">${esc(s.className)}</span></div>
-        <div class="wk-score"><strong>${wm.met}</strong><span class="muted">/${wm.rep} ביעד ${mode==='week'?'':RANK_LABEL[mode]}</span></div>
+        <div class="wk-score"><strong>${wm.met}</strong><span class="muted">/${wm.rep} ביעד ${mode==='week' && weekOffset===0 ? '' : wkLabel}</span></div>
       </div>
       <div class="wk-days">${dates.map((d,i)=>`<div class="wk-day"><div class="wk-dn">${DAY_NAMES[i]}</div><div>${flame(dayInfo(s,d))}</div><div class="wk-dd">${+d.slice(8)}</div></div>`).join('')}</div>
       <div class="wk-foot muted">${[goal, rank].filter(Boolean).join(' · ')}${ach.monthStars && ach.monthStars.length ? ' · '+starsHtml(ach.monthStars) : ''}${ach.trophies.length ? ' · '+'🏆'.repeat(ach.trophies.length) : ''} · גרסה ${versionBadge(s)}</div>
