@@ -242,6 +242,11 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
         <div class="toolbar">
           <div class="card-title" style="margin-bottom:0">עמידה ביעד השבוע</div>
           <select id="dash-class" onchange="renderWeek()"><option value="">כל הכיתות</option></select>
+          <select id="rank-mode" onchange="renderWeek()">
+            <option value="week">דירוג: השבוע</option>
+            <option value="month">דירוג: החודש</option>
+            <option value="ever">דירוג: מאז ומעולם</option>
+          </select>
         </div>
         <div class="tbl-wrap" style="margin-top:.75rem"><div id="week-table"></div></div>
         <div class="legend">
@@ -271,6 +276,7 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
               <option value="nav-on">מסננים ניווט ותפילה</option>
               <option value="nav-off">לא מסננים ניווט ותפילה</option>
               <option value="old-ver">גרסה ישנה – צריך לעדכן</option>
+              <option value="no-push">לא מקבלים פוש</option>
             </select>
           </div>
         </div>
@@ -709,17 +715,51 @@ async function renderDashboard(){
   renderWeek();
 }
 
+// ─── דירוג לפי תקופה: השבוע / החודש / מאז ומעולם ───
+// בתוך קבוצת היעד הנוכחית, רק בין תלמידים עם יום נתונים אחד לפחות בתקופה, ומשלושה תלמידים ומעלה.
+function periodMet(s, mode){
+  const end = addDays(OV.today,-1);
+  let met=0, rep=0;
+  for(const d of (s.days||[])){
+    if(d.date > end) continue;
+    if(mode==='week' && d.date < OV.weekStart) continue;
+    if(mode==='month' && d.date.slice(0,7) !== OV.today.slice(0,7)) continue;
+    const k = dayInfo(s,d.date).kind;
+    if(k==='met'||k==='out') rep++;
+    if(k==='met') met++;
+  }
+  return {met, rep};
+}
+function periodRanks(students, mode){
+  const out = {};
+  const groups = {};
+  for(const s of students){
+    const pm = periodMet(s, mode);
+    out[s.id] = {...pm, rank:null, size:0};
+    if(s.goalHours && pm.rep > 0) (groups[s.goalHours] = groups[s.goalHours] || []).push(s.id);
+  }
+  for(const ids of Object.values(groups)){
+    if(ids.length < 3) continue;
+    const vals = [...new Set(ids.map(id=>out[id].met))].sort((a,b)=>b-a);   // דירוג צפוף: שוויון = אותו מקום
+    for(const id of ids){ out[id].rank = vals.indexOf(out[id].met)+1; out[id].size = ids.length; }
+  }
+  return out;
+}
+const RANK_LABEL = { week:'השבוע', month:'החודש', ever:'מאז ומעולם' };
+
 function renderWeek(){
   if(!OV) return;
   const cls=document.getElementById('dash-class')?.value||'';
   let list=OV.students.filter(s=>s.consent);
   if(cls) list=list.filter(s=>s.className===cls);
-  list.sort((a,b)=>(a.goalHours||99)-(b.goalHours||99) || weekMet(b).met-weekMet(a).met || a.name.localeCompare(b.name,'he'));
+  const mode=document.getElementById('rank-mode')?.value||'week';
+  const PR=periodRanks(OV.students.filter(s=>s.consent), mode);
+  list.sort((a,b)=>(a.goalHours||99)-(b.goalHours||99) || PR[b.id].met-PR[a.id].met || a.name.localeCompare(b.name,'he'));
   const dates=[...Array(7)].map((_,i)=>addDays(OV.weekStart,i));
-  const head=`<tr><th class="name-h">תלמיד</th><th>יעד</th>${dates.map((d,i)=>`<th>${DAY_NAMES[i]}<br><span class="muted">${d.slice(8)}.${d.slice(5,7)}</span></th>`).join('')}<th>ביעד</th><th>דירוג</th><th>כוכבי החודש</th><th>גביעים השנה</th><th>גרסה</th></tr>`;
+  const head=`<tr><th class="name-h">תלמיד</th><th>יעד</th>${dates.map((d,i)=>`<th>${DAY_NAMES[i]}<br><span class="muted">${d.slice(8)}.${d.slice(5,7)}</span></th>`).join('')}<th>ביעד<br><span class="muted">${RANK_LABEL[mode]}</span></th><th>דירוג<br><span class="muted">${RANK_LABEL[mode]}</span></th><th>כוכבי החודש</th><th>גביעים השנה</th><th>גרסה</th></tr>`;
   const rows=list.map(s=>{
-    const wm=weekMet(s);
-    const rank = (s.rank && wm.rep > 0) ? `${s.rank}<span class="muted"> מתוך ${s.groupSize}</span>` : '<span class="muted">—</span>';
+    const wm=PR[s.id];
+    const rank = wm.rank ? `${wm.rank}<span class="muted"> מתוך ${wm.size}</span>` : '<span class="muted">—</span>';
     return `<tr>
       <td class="name">${platformIcon(s.platform)} <strong>${esc(s.name)}</strong> <span class="muted">${esc(s.className)}</span></td>
       <td>${s.goalHours?s.goalHours+'ש\'':'<span class="muted">ללא</span>'}</td>
@@ -733,13 +773,13 @@ function renderWeek(){
   // בטלפון: כרטיס לכל תלמיד במקום טבלה רחבה (13 עמודות לא נכנסות ב-390 נק')
   const mobile = window.matchMedia('(max-width:600px)').matches;
   const cards = list.map(s=>{
-    const wm=weekMet(s), ach=achievements(s);
-    const rank = (s.rank && wm.rep > 0) ? `דירוג ${s.rank}/${s.groupSize}` : '';
+    const wm=PR[s.id], ach=achievements(s);
+    const rank = wm.rank ? `דירוג ${RANK_LABEL[mode]} ${wm.rank}/${wm.size}` : '';
     const goal = s.goalHours ? `יעד ${s.goalHours}ש'` : 'ללא יעד';
     return `<div class="wk-card">
       <div class="wk-top">
         <div class="wk-name">${platformIcon(s.platform)} <strong>${esc(s.name)}</strong> <span class="muted">${esc(s.className)}</span></div>
-        <div class="wk-score"><strong>${wm.met}</strong><span class="muted">/${wm.rep} ביעד</span></div>
+        <div class="wk-score"><strong>${wm.met}</strong><span class="muted">/${wm.rep} ביעד ${mode==='week'?'':RANK_LABEL[mode]}</span></div>
       </div>
       <div class="wk-days">${dates.map((d,i)=>`<div class="wk-day"><div class="wk-dn">${DAY_NAMES[i]}</div><div>${flame(dayInfo(s,d))}</div><div class="wk-dd">${+d.slice(8)}</div></div>`).join('')}</div>
       <div class="wk-foot muted">${[goal, rank].filter(Boolean).join(' · ')}${ach.monthStars && ach.monthStars.length ? ' · '+starsHtml(ach.monthStars) : ''}${ach.trophies.length ? ' · '+'🏆'.repeat(ach.trophies.length) : ''} · גרסה ${versionBadge(s)}</div>
@@ -788,6 +828,7 @@ function filteredStudents(){
   if(status==='nav-on') f=f.filter(s=>s.navExcluded===true);
   if(status==='nav-off') f=f.filter(s=>s.navExcluded!==true);
   if(status==='old-ver') f=f.filter(versionOld);
+  if(status==='no-push') f=f.filter(s=>!s.hasPush);
   return {list:f, cls};
 }
 
@@ -803,7 +844,7 @@ async function exportStudents(){
   const dates=[]; for(let d=start; d<=end; d=addDays(d,1)) dates.push(d);
   const hm = m => m==null ? '' : `${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}`;
   const q = v => { const t=String(v??''); return /[",\n]/.test(t) ? '"'+t.replace(/"/g,'""')+'"' : t; };
-  const head = ['שם','כיתה','מכשיר','גרסה','יעד (שעות)','שיתף נתונים','מסנן ניווט ותפילה','סנכרון אחרון','ימים עם נתונים','ימים ביעד',
+  const head = ['שם','כיתה','מכשיר','גרסה','יעד (שעות)','שיתף נתונים','מסנן ניווט ותפילה','מקבל פוש','סנכרון אחרון','ימים עם נתונים','ימים ביעד',
     ...dates.map(d=>`${DAY_NAMES[new Date(d+'T12:00:00Z').getUTCDay()]} ${d.slice(8)}.${d.slice(5,7)}`)];
   const rows = list.map(s=>{
     let rep=0, met=0;
@@ -814,7 +855,7 @@ async function exportStudents(){
       return hm(info.minutes);
     });
     return [s.name, s.className, s.platform==='ios'?'אייפון':s.platform==='android'?'אנדרואיד':'', (s.appVersion||'')+(versionOld(s)?' (ישנה)':''), s.goalHours||'',
-      s.consent?'כן':'לא', navCsv(s), s.lastSync ? new Date(s.lastSync).toLocaleString('he-IL') : '', rep, met, ...cells];
+      s.consent?'כן':'לא', navCsv(s), s.hasPush?'כן':'לא', s.lastSync ? new Date(s.lastSync).toLocaleString('he-IL') : '', rep, met, ...cells];
   });
   const csv = '\uFEFF' + [head, ...rows].map(r=>r.map(q).join(',')).join('\r\n');   // BOM: עברית תקינה ב-Excel
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
@@ -840,13 +881,14 @@ async function renderStudents(){
   if(status==='nav-on') f=f.filter(s=>s.navExcluded===true);
   if(status==='nav-off') f=f.filter(s=>s.navExcluded!==true);
   if(status==='old-ver') f=f.filter(versionOld);
+  if(status==='no-push') f=f.filter(s=>!s.hasPush);
   // מספר התלמידים בכל אפשרות (לפי הכיתה שנבחרה)
   const base = cls ? OV.students.filter(s=>s.className===cls) : OV.students;
   const counts = { '':base.length, consent:base.filter(s=>s.consent).length, 'no-consent':base.filter(s=>!s.consent).length,
     attention:base.filter(needsAttention).length, 'no-sync':base.filter(s=>daysSince(s.lastSync)===null||daysSince(s.lastSync)>=2).length,
     'no-goal':base.filter(s=>!s.goalHours).length,
     'nav-on':base.filter(s=>s.navExcluded===true).length, 'nav-off':base.filter(s=>s.navExcluded!==true).length,
-    'old-ver':base.filter(versionOld).length };
+    'old-ver':base.filter(versionOld).length, 'no-push':base.filter(s=>!s.hasPush).length };
   const sel=document.getElementById('filter-status');
   if(sel) for(const o of sel.options){ o.textContent = o.textContent.replace(/ \(\d+\)$/,'') + ` (${counts[o.value] ?? 0})`; }
   document.getElementById('students-list').innerHTML = f.length ? f.map(studentRow).join('') : '<div class="muted" style="padding:.5rem 0">אין תלמידים</div>';
@@ -893,7 +935,7 @@ function studentDetail(s){
         return `<div class="day-cell">${flame(inf)}${DAY_NAMES[i]} ${d.slice(8)}<br>${inf.minutes!=null?hm(inf.minutes):''}</div>`; }).join('')}</div>`;
   }).join('');
   return `<div style="margin-top:10px" onclick="event.stopPropagation()">
-    <div class="muted">יעד: ${s.goalHours?s.goalHours+' שעות':'ללא'} · דירוג השבוע: ${s.rank?s.rank+' מתוך '+s.groupSize+' (יעד '+s.goalHours+'ש\')':'—'} · גרסה: ${versionBadge(s)} · ניווט ותפילה: ${navLabel(s)}</div>
+    <div class="muted">יעד: ${s.goalHours?s.goalHours+' שעות':'ללא'} · דירוג השבוע: ${s.rank?s.rank+' מתוך '+s.groupSize+' (יעד '+s.goalHours+'ש\')':'—'} · גרסה: ${versionBadge(s)} · ניווט ותפילה: ${navLabel(s)} · פוש: ${s.hasPush?'פעיל':'<span style="color:var(--red)">לא פעיל</span>'}</div>
     <div class="muted" style="margin-top:6px">כוכבים השנה: ${achievements(s).stars.length} ${starsHtml(achievements(s).stars)} · גביעים: ${achievements(s).trophies.length ? achievements(s).trophies.map(t=>'🏆 '+TROPHY_NAME[t.type]+' ('+t.month.slice(5)+'/'+t.month.slice(2,4)+')').join(', ') : '—'}</div>
     ${grid}
   </div>`;
