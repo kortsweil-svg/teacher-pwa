@@ -141,6 +141,9 @@
 
 .phone-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:6px 0 10px}
 .phone-row input{flex:1;min-width:180px;font-size:15px;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text)}
+
+.day-edit{cursor:pointer}
+.day-edit:hover{outline:1px solid var(--border2)}
 .wk-list{display:flex;flex-direction:column;gap:8px}
 .wk-card{border:0.5px solid var(--border);border-radius:12px;padding:10px 10px 8px;background:var(--bg)}
 .wk-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}
@@ -865,6 +868,26 @@ function navLabel(s){
   return 'לא ידוע (צריך גרסה 6.70)';
 }
 function navCsv(s){ return s.navExcluded===true ? 'כן' : s.navExcluded===false ? 'לא' : 'לא ידוע'; }
+// תיקון יום של תלמיד: זמן חדש (ש:דד) או ריק = "אין נתון". התיקון ננעל - הטלפון לא דורס אותו,
+// והוא מגיע גם לאפליקציה של התלמיד (6.74+).
+async function editDay(studentId, date, cur){
+  const curTxt = cur==null ? '' : hm(cur);
+  const v = prompt(`תיקון ${date.slice(8)}.${date.slice(5,7)}\nהקלד זמן בפורמט ש:דד (למשל 1:46), או השאר ריק = "אין נתון".`, curTxt);
+  if(v===null) return;   // ביטול
+  let minutes = null;
+  const t = v.trim();
+  if(t){
+    const m = t.match(/^(\d{1,2})(?::(\d{1,2}))?$/);
+    if(!m){ alert('פורמט לא תקין. דוגמה: 2:30'); return; }
+    minutes = m[2]!==undefined ? (+m[1])*60 + (+m[2]) : (+m[1]);   // "90" = 90 דקות
+    if(minutes>1440){ alert('יותר מ-24 שעות'); return; }
+  }
+  const r = await api('/api/teacher/day','POST',{studentId, date, minutes});
+  if(r.error){ alert('שגיאה: '+r.error); return; }
+  OV = null;
+  if(document.getElementById('screen-students')?.classList.contains('active')) renderStudents(); else renderDashboard();
+}
+
 // התלמידים שמוצגים לפי הסינון במסך "תלמידים"
 function filteredStudents(){
   const cls=document.getElementById('filter-class')?.value||'';
@@ -983,9 +1006,11 @@ function studentDetail(s){
     const st = achievements(s).stars.find(x=>x.sat===week[6]);
     return `<div class="muted" style="margin-top:10px">שבוע ${week[0].slice(8)}.${week[0].slice(5,7)} — ${met} ימים ביעד${st?' '+STAR_ICON[st.type]:''}</div>
       <div class="days-grid">${week.map((d,i)=>{ const inf=dayInfo(s,d);
-        return `<div class="day-cell">${flame(inf)}${DAY_NAMES[i]} ${d.slice(8)}<br>${inf.minutes!=null?hm(inf.minutes):''}</div>`; }).join('')}</div>`;
+        const past = d < OV.today;
+        return `<div class="day-cell${past?' day-edit':''}" ${past?`onclick="editDay('${s.id}','${d}',${inf.minutes!=null?inf.minutes:'null'})" title="לחץ לתיקון"`:''}>${flame(inf)}${DAY_NAMES[i]} ${d.slice(8)}<br>${inf.minutes!=null?hm(inf.minutes):''}</div>`; }).join('')}</div>`;
   }).join('');
   return `<div style="margin-top:10px" onclick="event.stopPropagation()">
+    <div class="muted" style="font-size:11px">לתיקון יום שגוי (למשל 12 שעות בתקלה) – לחץ על היום.</div>
     <div class="muted">יעד: ${s.goalHours?s.goalHours+' שעות':'ללא'} · דירוג השבוע: ${s.rank?s.rank+' מתוך '+s.groupSize+' (יעד '+s.goalHours+'ש\')':'—'} · גרסה: ${versionBadge(s)} · ניווט ותפילה: ${navLabel(s)} · פוש: ${s.hasPush?'פעיל':'<span style="color:var(--red)">לא פעיל</span>'}</div>
     <div class="muted" style="margin-top:6px">כוכבים השנה: ${achievements(s).stars.length} ${starsHtml(achievements(s).stars)} · גביעים: ${achievements(s).trophies.length ? achievements(s).trophies.map(t=>'🏆 '+TROPHY_NAME[t.type]+' ('+t.month.slice(5)+'/'+t.month.slice(2,4)+')').join(', ') : '—'}</div>
     ${grid}
