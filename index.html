@@ -138,6 +138,9 @@
 .sup-text{font-size:14px;margin:6px 0;white-space:pre-wrap}
 .sup-actions{display:flex;gap:6px;flex-wrap:wrap}
 .diag{font-size:11px;background:var(--bg2);border-radius:8px;padding:8px;margin-top:6px;white-space:pre-wrap;direction:ltr;text-align:left;max-height:320px;overflow:auto}
+
+.phone-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:6px 0 10px}
+.phone-row input{flex:1;min-width:180px;font-size:15px;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text)}
 .wk-list{display:flex;flex-direction:column;gap:8px}
 .wk-card{border:0.5px solid var(--border);border-radius:12px;padding:10px 10px 8px;background:var(--bg)}
 .wk-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}
@@ -314,6 +317,11 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
       <div class="card" id="support-card">
         <div class="card-title">פניות תמיכה</div>
         <div class="card-sub">פניות שתלמידים שלחו מהאפליקציה (הגדרות ← פנייה לתמיכה)</div>
+        <div class="phone-row" id="support-phone-row">
+          <input type="tel" id="support-phone" placeholder="מספר וואטסאפ לצילומי מסך (למשל 0501234567)" inputmode="tel"/>
+          <button class="btn" onclick="saveSupportPhone()">שמור</button>
+          <span class="muted" id="support-phone-msg"></span>
+        </div>
         <div id="support-list" class="muted">טוען...</div>
       </div>
       <div class="card" id="staff-card" style="display:none">
@@ -1092,6 +1100,24 @@ async function renderSupport(){
     </div>`;
   }).join('');
 }
+// מספר הוואטסאפ שאליו התלמידים שולחים צילומי מסך אחרי פנייה
+async function loadSupportPhone(){
+  const row=document.getElementById('support-phone-row'); if(!row) return;
+  if(localStorage.getItem('is_staff')==='1'){ row.style.display='none'; return; }   // רק בעל החשבון
+  row.style.display='flex';
+  const r=await api('/api/teacher/support-phone');
+  const inp=document.getElementById('support-phone');
+  if(inp && r && r.phone !== undefined && document.activeElement!==inp)
+    inp.value = r.phone ? '0' + String(r.phone).replace(/^972/, '') : '';
+}
+async function saveSupportPhone(){
+  const msg=document.getElementById('support-phone-msg');
+  const phone=document.getElementById('support-phone').value.trim();
+  msg.textContent='שומר...';
+  const r=await api('/api/teacher/support-phone','POST',{phone});
+  msg.textContent = r.error ? ('שגיאה: '+r.error) : (r.phone ? '✓ נשמר' : '✓ נמחק (אין כפתור וואטסאפ)');
+}
+
 async function markSupport(id, handled){
   await api('/api/teacher/support/'+id+'/handled','POST',{handled});
   renderSupport();
@@ -1099,6 +1125,7 @@ async function markSupport(id, handled){
 
 async function renderManage(){
   renderSupport();
+  loadSupportPhone();
   renderAccess();
   renderStaff();
   // מחיקת מרחב - רק לבעל החשבון
