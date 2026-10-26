@@ -1163,7 +1163,7 @@ async function renderManage(){
         <div class="avatar">${esc(s.initials||s.name?.slice(0,2))}</div>
         <div style="flex:1;min-width:0">
           <div style="font-size:14px;font-weight:500">${esc(s.name)}</div>
-          <div class="muted">${esc(normClass(s.className))} · ${s.consent?'אישר':'ממתין'}</div>
+          <div class="muted">${esc(normClass(s.className))} · ${s.consent?'אישר':'ממתין'}${s.username?` · שם משתמש: <span dir="ltr">${esc(s.username)}</span>`:''}</div>
           <div class="edit-box" id="edit-${s.id}" style="display:none">
             <input type="text" id="en-${s.id}" value="${esc(s.name)}" placeholder="שם פרטי ושם משפחה"/>
             <input type="text" id="ec-${s.id}" value="${esc(s.className||'')}" placeholder="כיתה (למשל יא1)"/>
@@ -1175,9 +1175,20 @@ async function renderManage(){
           </div>
         </div>
         <button class="btn" style="font-size:13px" onclick="toggleEdit('${s.id}')">ערוך</button>
+        <button class="btn" style="font-size:13px" onclick="resetPassword('${s.id}','${esc(s.name).replace(/'/g,'')}')">אפס סיסמה</button>
         <button class="btn btn-danger" style="font-size:13px" onclick="removeStudent('${s.id}')">הסר</button>
       </div>`).join(''):'<div class="muted" style="padding:.5rem 0">אין תלמידים עדיין</div>';
   }
+}
+
+// איפוס סיסמה: סיסמה זמנית של 6 ספרות שהמורה מוסר לתלמיד. הטלפון המחובר נשאר מחובר.
+async function resetPassword(id, name){
+  if(!confirm(`לאפס את הסיסמה של ${name}?\nתיווצר סיסמה חדשה, והישנה תפסיק לעבוד.`)) return;
+  const r = await api('/api/students/'+id+'/reset-password','POST');
+  if(r.error){ alert('שגיאה: '+r.error); return; }
+  const txt = `פרטי כניסה ל"זמן מסך":\nשם משתמש: ${r.username}\nסיסמה: ${r.password}`;
+  try{ await navigator.clipboard.writeText(txt); }catch(_){}
+  alert(txt + '\n\n(הועתק – אפשר להדביק בוואטסאפ לתלמיד)');
 }
 
 // עריכת שם וכיתה של תלמיד
