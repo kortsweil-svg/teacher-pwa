@@ -129,6 +129,15 @@
 .week-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:.75rem}
 .week-nav .btn{font-size:13px;padding:6px 10px}
 .week-nav .btn:disabled{opacity:.35;cursor:default}
+
+.nav-badge{background:var(--red);color:#fff;border-radius:999px;font-size:11px;padding:1px 6px;margin-right:4px;vertical-align:middle}
+.sup-row{padding:10px 0;border-bottom:0.5px solid var(--border)}
+.sup-row:last-child{border-bottom:none}
+.sup-done{opacity:.6}
+.sup-head{font-size:13px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.sup-text{font-size:14px;margin:6px 0;white-space:pre-wrap}
+.sup-actions{display:flex;gap:6px;flex-wrap:wrap}
+.diag{font-size:11px;background:var(--bg2);border-radius:8px;padding:8px;margin-top:6px;white-space:pre-wrap;direction:ltr;text-align:left;max-height:320px;overflow:auto}
 .wk-list{display:flex;flex-direction:column;gap:8px}
 .wk-card{border:0.5px solid var(--border);border-radius:12px;padding:10px 10px 8px;background:var(--bg)}
 .wk-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}
@@ -223,7 +232,7 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
     <nav>
       <button class="nav-btn active" onclick="showScreen('dashboard')">השבוע</button>
       <button class="nav-btn" onclick="showScreen('students')">תלמידים</button>
-      <button class="nav-btn" onclick="showScreen('manage')">ניהול</button>
+      <button class="nav-btn" onclick="showScreen('manage')">ניהול <span id="support-badge" class="nav-badge" style="display:none"></span></button>
       <button class="nav-btn" onclick="logout()" style="color:var(--red)">יציאה</button>
     </nav>
   </header>
@@ -302,6 +311,11 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
     </div>
 
     <div id="screen-manage" class="screen">
+      <div class="card" id="support-card">
+        <div class="card-title">פניות תמיכה</div>
+        <div class="card-sub">פניות שתלמידים שלחו מהאפליקציה (הגדרות ← פנייה לתמיכה)</div>
+        <div id="support-list" class="muted">טוען...</div>
+      </div>
       <div class="card" id="staff-card" style="display:none">
         <div class="card-title">משתמשי צוות</div>
         <div class="card-sub">אנשים נוספים (מנהל, מחנך, יועץ) שרואים את אותו לוח, כל אחד עם שם משתמש וסיסמה משלו</div>
@@ -514,6 +528,7 @@ function startPing(){
 }
 function enterApp(){
   startPing();
+  setTimeout(()=>{ loadSupport().catch(()=>{}); }, 800);
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app-screen').style.display='block';
   document.getElementById('teacher-header').textContent=teacherName;
@@ -1036,7 +1051,54 @@ async function deleteSpace(){
   logout();
 }
 
+// ─── פניות תמיכה ───
+let SUPPORT = [];
+async function loadSupport(){
+  const r = await api('/api/teacher/support');
+  SUPPORT = (r && r.messages) || [];
+  const open = SUPPORT.filter(m=>!m.handled).length;
+  const b = document.getElementById('support-badge');
+  if(b){ b.textContent = open; b.style.display = open ? 'inline-block' : 'none'; }
+  return SUPPORT;
+}
+function diagHtml(raw){
+  let d; try{ d = JSON.parse(raw); }catch(_){ return `<pre class="diag">${esc(raw)}</pre>`; }
+  const lines = [];
+  lines.push(`מכשיר: ${d.platform||''} ${d.os||''} · גרסה ${d.app||''} · סנכרון אחרון: ${d.lastSync ? new Date(d.lastSync).toLocaleString('he-IL') : '—'}`);
+  if(d.auth!==undefined) lines.push(`הרשאה: ${d.auth} · ניווט: נבחר=${d.travel?.picked?'כן':'לא'} מאומת=${d.travel?.verified?'כן':'לא'}`);
+  if(d.activities) lines.push(`פעילויות: ${Array.isArray(d.activities)?d.activities.join(','):d.activities}`);
+  if(d.results) lines.push('תוצאות: ' + Object.entries(d.results).sort().slice(-8).map(([k,v])=>`${k.slice(5)}=${Math.floor(v/60)}:${String(v%60).padStart(2,'0')}`).join('  '));
+  if(d.log && d.log.length) lines.push('יומן:\n' + d.log.join('\n'));
+  if(d.system && d.system.length) lines.push('מערכת: ' + d.system.join(' / '));
+  if(d.diagError) lines.push('שגיאת אבחון: ' + d.diagError);
+  return `<pre class="diag">${esc(lines.join('\n'))}</pre>`;
+}
+async function renderSupport(){
+  const el = document.getElementById('support-list'); if(!el) return;
+  await loadSupport();
+  if(!SUPPORT.length){ el.textContent = 'אין פניות.'; return; }
+  el.innerHTML = SUPPORT.map(m=>{
+    const t = new Date(String(m.created_at).endsWith('Z') ? m.created_at : m.created_at+'Z');
+    const when = t.toLocaleString('he-IL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    return `<div class="sup-row ${m.handled?'sup-done':''}">
+      <div class="sup-head"><strong>${esc(m.name||'תלמיד')}</strong> <span class="muted">${esc(normClass(m.class_name||''))} · ${when} · ${m.platform==='ios'?'אייפון':m.platform==='android'?'אנדרואיד':''} ${esc(m.app_version||'')}</span>
+        ${m.handled?'<span class="badge">טופל</span>':'<span class="badge badge-amber">חדש</span>'}</div>
+      <div class="sup-text">${esc(m.text)}</div>
+      <div class="sup-actions">
+        ${m.diag?`<button class="btn" style="font-size:12px" onclick="this.parentNode.nextElementSibling.style.display=this.parentNode.nextElementSibling.style.display==='none'?'block':'none'">נתוני אבחון</button>`:''}
+        <button class="btn" style="font-size:12px" onclick="markSupport(${m.id}, ${!m.handled})">${m.handled?'החזר לפתוחות':'סמן כטופל'}</button>
+      </div>
+      ${m.diag?`<div style="display:none">${diagHtml(m.diag)}</div>`:''}
+    </div>`;
+  }).join('');
+}
+async function markSupport(id, handled){
+  await api('/api/teacher/support/'+id+'/handled','POST',{handled});
+  renderSupport();
+}
+
 async function renderManage(){
+  renderSupport();
   renderAccess();
   renderStaff();
   // מחיקת מרחב - רק לבעל החשבון
@@ -1103,6 +1165,7 @@ let lastRefresh = Date.now();
 function refreshActive(){
   if(!token || document.visibilityState!=='visible') return;
   lastRefresh = Date.now();
+  loadSupport().catch(()=>{});
   if(document.getElementById('screen-dashboard')?.classList.contains('active')) renderDashboard();
   else if(document.getElementById('screen-students')?.classList.contains('active')) renderStudents();
 }
