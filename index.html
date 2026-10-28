@@ -279,7 +279,7 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
           <span><span class="fl">⏳</span> היום</span>
           <span><span class="fl none">—</span> אין נתון</span>
           <span>🥇🥈🥉⭐ כוכב שבועי (5 ימים ביעד)</span>
-          <span>🏆 גביע חודשי (4 כוכבי זהב/כסף/ארד)</span>
+          <span>🏆 גביע חודשי (כוכב בכל שבועות החודש)</span>
         </div>
       </div>
     </div>
@@ -630,6 +630,15 @@ function weekMet(s){
 const STAR_ICON = {gold:'🥇', silver:'🥈', bronze:'🥉', basic:'⭐'};
 const TROPHY_NAME = {gold:'זהב', silver:'כסף', bronze:'ארד', mixed:'משולב'};
 function starTypeFor(g){ return g===3?'gold':g===4?'silver':g===5?'bronze':g>=6?'basic':null; }
+// גביע: כוכב בכל שבועות החודש. שבוע שייך לחודש של השבת שלו,
+// ולכן בחודש עם 4 שבתות צריך 4 כוכבים, ובחודש עם 5 שבתות – 5.
+function saturdaysIn(ym){
+  const [y,m]=ym.split('-').map(Number); let n=0;
+  for(let d=1; d<=new Date(y,m,0).getDate(); d++) if(new Date(y,m-1,d).getDay()===6) n++;
+  return n;
+}
+function trophyNeed(ym){ return saturdaysIn(ym); }
+
 function achievements(s){
   if(s._ach) return s._ach;
   const year = OV.today.slice(0,4);
@@ -654,7 +663,7 @@ function achievements(s){
   const months=[...new Set(stars.map(x=>x.sat.slice(0,7)))].sort();
   for(const m of months){
     const club=stars.filter(x=>x.sat.startsWith(m) && x.type!=='basic');
-    if(club.length>=4){
+    if(club.length>=trophyNeed(m)){   // כוכב בכל שבוע של החודש (4 או 5)
       const t=['gold','silver','bronze'].find(c=>club.every(x=>x.type===c)) || 'mixed';
       trophies.push({month:m, type:t});
     }
