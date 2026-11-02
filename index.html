@@ -161,7 +161,7 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
 @media(max-width:600px){
   header{flex-direction:column;align-items:stretch;gap:6px;padding:calc(env(safe-area-inset-top) + 8px) .75rem 8px}
   .logo{font-size:15px;text-align:center}
-  nav{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+  nav{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
   .nav-btn{padding:9px 4px;font-size:14px;text-align:center}
   main{padding:.75rem .6rem calc(1rem + env(safe-area-inset-bottom))}
   .card{padding:.9rem .75rem;border-radius:12px}
@@ -238,6 +238,7 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
     <nav>
       <button class="nav-btn active" onclick="showScreen('dashboard')">השבוע</button>
       <button class="nav-btn" onclick="showScreen('students')">תלמידים</button>
+      <button class="nav-btn" onclick="showScreen('classes')">כיתות</button>
       <button class="nav-btn" onclick="showScreen('manage')">ניהול <span id="support-badge" class="nav-badge" style="display:none"></span></button>
       <button class="nav-btn" onclick="logout()" style="color:var(--red)">יציאה</button>
     </nav>
@@ -279,7 +280,7 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
           <span><span class="fl">⏳</span> היום</span>
           <span><span class="fl none">—</span> אין נתון</span>
           <span>🥇🥈🥉⭐ כוכב שבועי (5 ימים ביעד)</span>
-          <span>🏆 גביע חודשי (כוכב בכל שבועות החודש)</span>
+          <span>🏆 גביע (כל 4 כוכבים, גם לא רצופים)</span>
         </div>
       </div>
     </div>
@@ -313,6 +314,23 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
           <button class="btn" onclick="exportStudents()">⬇ ייצוא ל-Excel</button>
         </div>
         <div style="margin-top:1rem" id="students-list"></div>
+      </div>
+    </div>
+
+    <div id="screen-classes" class="screen">
+      <div class="card">
+        <div class="toolbar">
+          <div class="card-title" style="margin-bottom:0">תחרות כיתות</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select id="classes-month" onchange="renderClasses()"></select>
+            <select id="classes-by" onchange="renderClasses()">
+              <option value="class">לפי כיתה</option>
+              <option value="grade">לפי שכבה</option>
+            </select>
+          </div>
+        </div>
+        <div class="muted" style="margin:6px 0 12px;font-size:13px">הדירוג לפי <strong>ממוצע נקודות לתלמיד</strong> בחודש – כל תלמידי הכיתה נכללים, כך שגם השתתפות חשובה. נקודות: יום ביעד 3ש'=1.75, 4ש'=1.5, 5ש'=1, 6ש'=0.5; חריגה עד חצי שעה = חצי, עד שעה = רבע.</div>
+        <div id="classes-board"></div>
       </div>
     </div>
 
@@ -648,6 +666,22 @@ function trophyNeed(ym){
   return n;
 }
 
+// ניקוד משוקלל (כמו בשרת): יום ביעד 3ש'=1.75, 4ש'=1.5, 5ש'=1, 6ש'+=0.5;
+// חריגה עד חצי שעה = חצי מהנקודות, עד שעה = רבע.
+function dayPoints(minutes, g){
+  if(!g || minutes==null) return 0;
+  const w = g<=3?1.75 : g<=4?1.5 : g<=5?1 : 0.5, over = minutes - g*60;
+  return over<=0 ? w : over<=30 ? w/2 : over<=60 ? w/4 : 0;
+}
+function pointsFor(s, dates){
+  let p=0;
+  for(const d of dates){
+    const day=(s.days||[]).find(x=>x.date===d);
+    if(day && day.minutes!=null) p+=dayPoints(day.minutes, day.goalHours ?? s.goalHours);
+  }
+  return Math.round(p*100)/100;
+}
+
 function achievements(s){
   if(s._ach) return s._ach;
   // השנה: 1.9 עד 31.8 (מהשרת). שבוע נכלל אם השבת שלו בתוך השנה, ונספרים רק ימים שבתוכה.
@@ -670,14 +704,13 @@ function achievements(s){
     const type=starTypeFor(goal);
     if(type && measured>=4 && met>=5) stars.push({sat, type});
   }
+  // גביע: כל 4 כוכבי מועדון (זהב/כסף/ארד) במהלך השנה, גם לא רצופים ובין חודשים
   const trophies=[];
-  const months=[...new Set(stars.map(x=>x.sat.slice(0,7)))].sort();
-  for(const m of months){
-    const club=stars.filter(x=>x.sat.startsWith(m) && x.type!=='basic');
-    if(club.length>=trophyNeed(m)){   // כוכב בכל שבוע של החודש (4 או 5)
-      const t=['gold','silver','bronze'].find(c=>club.every(x=>x.type===c)) || 'mixed';
-      trophies.push({month:m, type:t});
-    }
+  const club=stars.filter(x=>x.type!=='basic');
+  for(let i=3;i<club.length;i+=4){
+    const four=club.slice(i-3,i+1);
+    const t=['gold','silver','bronze'].find(c=>four.every(x=>x.type===c)) || 'mixed';
+    trophies.push({month:club[i].sat.slice(0,7), type:t});
   }
   const curMonth=OV.today.slice(0,7);
   s._ach={stars, trophies, monthStars:stars.filter(x=>x.sat.startsWith(curMonth))};
@@ -732,10 +765,11 @@ async function loadOverview(){
 
 function showScreen(s){
   document.querySelectorAll('.screen').forEach(el=>el.classList.remove('active'));
-  document.querySelectorAll('.nav-btn').forEach((b,i)=>b.classList.toggle('active',['dashboard','students','manage'][i]===s));
+  document.querySelectorAll('.nav-btn').forEach((b,i)=>b.classList.toggle('active',['dashboard','students','classes','manage'][i]===s));
   document.getElementById('screen-'+s).classList.add('active');
   if(s==='dashboard') renderDashboard();
   if(s==='students') renderStudents();
+  if(s==='classes') renderClasses();
   if(s==='manage') renderManage();
 }
 
@@ -830,7 +864,7 @@ function renderWeek(){
   const first = OV.students.flatMap(x=>(x.days||[]).map(d=>d.date)).sort()[0];
   const pb=document.querySelector('.week-nav .btn'); if(pb) pb.disabled = !first || ws <= first;
   const wkLabel = mode==='week' ? weekWord() : RANK_LABEL[mode];
-  const head=`<tr><th class="name-h">תלמיד</th><th>יעד</th>${dates.map((d,i)=>`<th>${DAY_NAMES[i]}<br><span class="muted">${d.slice(8)}.${d.slice(5,7)}</span></th>`).join('')}<th>ביעד<br><span class="muted">${wkLabel}</span></th><th>דירוג<br><span class="muted">${wkLabel}</span></th><th>כוכבי החודש</th><th>גביעים<br><span class="muted">שנת הלימודים</span></th><th>גרסה</th></tr>`;
+  const head=`<tr><th class="name-h">תלמיד</th><th>יעד</th>${dates.map((d,i)=>`<th>${DAY_NAMES[i]}<br><span class="muted">${d.slice(8)}.${d.slice(5,7)}</span></th>`).join('')}<th>ביעד<br><span class="muted">${wkLabel}</span></th><th>דירוג<br><span class="muted">${wkLabel}</span></th><th>נקודות<br><span class="muted">${wkLabel}</span></th><th>כוכבי החודש</th><th>גביעים<br><span class="muted">שנת הלימודים</span></th><th>גרסה</th></tr>`;
   const rows=list.map(s=>{
     const wm=PR[s.id];
     const rank = wm.rank ? `${wm.rank}<span class="muted"> מתוך ${wm.size}</span>` : '<span class="muted">—</span>';
@@ -840,6 +874,7 @@ function renderWeek(){
       ${dates.map(d=>`<td>${flame(dayInfo(s,d))}</td>`).join('')}
       <td><strong>${wm.met}</strong><span class="muted">/${wm.rep}</span></td>
       <td>${rank}</td>
+      <td>${pointsFor(s, dates.filter(d=>d<OV.today)) || '<span class="muted">—</span>'}</td>
       <td>${starsHtml(achievements(s).monthStars)}</td>
       <td>${achievements(s).trophies.length ? '🏆'.repeat(achievements(s).trophies.length) : '<span class="muted">—</span>'}</td>
       <td>${versionBadge(s)}</td></tr>`;
@@ -958,6 +993,51 @@ async function exportStudents(){
   a.href = URL.createObjectURL(blob); a.download = name;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+}
+
+// תחרות כיתות: ממוצע נקודות לתלמיד בחודש (כל תלמידי הכיתה, גם מי שלא מדד = 0)
+async function renderClasses(){
+  const box=document.getElementById('classes-board');
+  box.innerHTML='<div class="muted" style="padding:1rem 0">טוען...</div>';
+  if(!(await loadOverview())){ box.innerHTML=''; return; }
+  const HEB=['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+  const sel=document.getElementById('classes-month');
+  const start=OV.yearStart||(OV.today.slice(0,4)+'-01-01');
+  if(!sel.options.length){
+    const months=[]; let m=OV.today.slice(0,7);
+    while(m>=start.slice(0,7)){ months.push(m); const [y,mm]=m.split('-').map(Number); m=mm===1?`${y-1}-12`:`${y}-${String(mm-1).padStart(2,'0')}`; }
+    sel.innerHTML=months.map(x=>`<option value="${x}">${HEB[+x.slice(5)-1]} ${x.slice(0,4)}${x===OV.today.slice(0,7)?' (עד אתמול)':''}</option>`).join('');
+  }
+  const month=sel.value||OV.today.slice(0,7);
+  const by=document.getElementById('classes-by').value;
+  const groupOf=s=> by==='grade' ? String(s.className||'').replace(/\s*\d+\s*$/,'').trim() : s.className;
+  const [y,mm]=month.split('-').map(Number);
+  const dates=[]; for(let d=1; d<=new Date(y,mm,0).getDate(); d++){ const iso=`${month}-${String(d).padStart(2,'0')}`; if(iso<OV.today) dates.push(iso); }
+  const groups={};
+  for(const s of OV.students.filter(x=>x.active!==false)){
+    const g=groupOf(s)||'ללא כיתה';
+    const pts=pointsFor(s,dates);
+    const metDays=dates.filter(d=>{ const i=dayInfo(s,d); return i&&i.kind==='met'; }).length;
+    const repDays=dates.filter(d=>(s.days||[]).some(x=>x.date===d&&x.minutes!=null)).length;
+    const G=groups[g]||(groups[g]={name:g,n:0,active:0,pts:0,met:0,rep:0,best:null});
+    G.n++; G.pts+=pts; G.met+=metDays; G.rep+=repDays; if(repDays>0) G.active++;
+    if(!G.best||pts>G.best.pts) G.best={name:s.name,pts};
+  }
+  const list=Object.values(groups).map(G=>({...G,avg:G.n?G.pts/G.n:0})).sort((a,b)=>b.avg-a.avg);
+  if(!list.length){ box.innerHTML='<div class="muted">אין נתונים לחודש הזה.</div>'; return; }
+  const medal=i=>['🥇','🥈','🥉'][i]||'';
+  box.innerHTML=`<div style="overflow-x:auto"><table class="week-table"><thead><tr>
+      <th>מקום</th><th class="name-h">${by==='grade'?'שכבה':'כיתה'}</th><th>ממוצע לתלמיד</th><th>סה"כ נקודות</th><th>משתתפים</th><th>ימים ביעד</th><th>המצטיין</th>
+    </tr></thead><tbody>${list.map((G,i)=>`<tr${i===0?' style="background:var(--green-bg)"':''}>
+      <td><strong>${i+1}</strong> ${medal(i)}</td>
+      <td class="name"><strong>${esc(G.name)}</strong>${i===0?' 👑':''}</td>
+      <td><strong>${(Math.round(G.avg*100)/100)}</strong></td>
+      <td>${Math.round(G.pts*100)/100}</td>
+      <td>${G.active}<span class="muted">/${G.n}</span></td>
+      <td>${G.rep?Math.round(G.met/G.rep*100)+'%':'—'}</td>
+      <td>${G.best&&G.best.pts>0?esc(G.best.name)+' <span class="muted">('+(Math.round(G.best.pts*100)/100)+')</span>':'<span class="muted">—</span>'}</td>
+    </tr>`).join('')}</tbody></table></div>
+    <div class="muted" style="margin-top:10px;font-size:13px">🏆 הכיתה המנצחת ב${HEB[mm-1]}: <strong>${esc(list[0].name)}</strong> – ממוצע ${Math.round(list[0].avg*100)/100} נקודות לתלמיד.</div>`;
 }
 
 async function renderStudents(){
