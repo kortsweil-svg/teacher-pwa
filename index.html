@@ -611,7 +611,7 @@ function dayInfo(s,date){
   if(!d) return {kind:'none'};
   const g = goalOf(s,d);
   if(!g) return {kind:'nogoal', minutes:d.minutes};
-  return {kind: d.minutes <= g*60 ? 'met' : 'out', minutes:d.minutes, goal:g};
+  return {kind: d.minutes <= g*60 + 1 ? 'met' : 'out', minutes:d.minutes, goal:g};   // דקת סובלנות (אייפון שומר 3:00 כ-3:01)
 }
 function flame(info){
   if(info.kind==='future') return '<span class="fl future"></span>';
@@ -670,7 +670,7 @@ function trophyNeed(ym){
 // חריגה עד חצי שעה = חצי מהנקודות, עד שעה = רבע.
 function dayPoints(minutes, g){
   if(!g || minutes==null) return 0;
-  const w = g<=3?1.75 : g<=4?1.5 : g<=5?1 : 0.5, over = minutes - g*60;
+  const w = g<=3?1.75 : g<=4?1.5 : g<=5?1 : 0.5, over = minutes - g*60 - 1;
   return over<=0 ? w : over<=30 ? w/2 : over<=60 ? w/4 : 0;
 }
 function pointsFor(s, dates){
@@ -699,7 +699,7 @@ function achievements(s){
       if(!day) continue;
       const g=goalOf(s,day); if(!g) continue;
       goal=g; measured++;
-      if(day.minutes<=g*60) met++;
+      if(day.minutes<=g*60+1) met++;
     }
     const type=starTypeFor(goal);
     if(type && measured>=4 && met>=5) stars.push({sat, type});
