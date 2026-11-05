@@ -100,6 +100,8 @@
 .week-table td.name{text-align:right;white-space:nowrap}
 .fl{font-size:17px;line-height:1}
 .fl.out{filter:grayscale(1);opacity:.35}
+.fl-wrap{position:relative;display:inline-block}
+.code-mark{position:absolute;top:-6px;left:-8px;font-size:10px;line-height:1}
 .fl.none{color:var(--text2);font-size:12px}
 .fl.future{display:inline-block;width:14px;height:14px;border:1px dashed var(--border2);border-radius:50%}
 .tbl-wrap{overflow-x:auto}
@@ -644,9 +646,15 @@ function dayInfo(s,date){
   if(!d) return {kind:'none'};
   const g = goalOf(s,d);
   if(!g) return {kind:'nogoal', minutes:d.minutes};
-  return {kind: d.minutes <= g*60 + 1 ? 'met' : 'out', minutes:d.minutes, goal:g};   // דקת סובלנות (אייפון שומר 3:00 כ-3:01)
+  return {kind: d.minutes <= g*60 + 1 ? 'met' : 'out', minutes:d.minutes, goal:g, code:!!d.code};   // דקת סובלנות (אייפון שומר 3:00 כ-3:01)
 }
+// יום שהתלמיד דיווח בקוד מהכרטיס (הטלפון היה כבוי בשעת המדידה): 🔑 קטן ליד הלהבה
 function flame(info){
+  if(info.code && (info.kind==='met'||info.kind==='out'))
+    return '<span class="fl-wrap" title="דווח בקוד · '+hm(info.minutes)+'">'+flameCore(info)+'<span class="code-mark">🔑</span></span>';
+  return flameCore(info);
+}
+function flameCore(info){
   if(info.kind==='future') return '<span class="fl future"></span>';
   if(info.kind==='today') return '<span class="fl">⏳</span>';
   if(info.kind==='met') return '<span class="fl" title="'+hm(info.minutes)+'">🔥</span>';
@@ -759,7 +767,15 @@ function attentionReasons(s){
   const d=daysSince(s.lastSync);
   if(d===null) r.push('לא סונכרן מעולם');
   else if(d>=2) r.push(`לא סונכרן ${d} ימים`);
+  const codes=codeDays(s);
+  if(codes>=3) r.push(`${codes} ימים דווחו בקוד השבוע – כנראה הטלפון כבוי בלילה`);
   return r;
+}
+// כמה מ-7 הימים האחרונים דווחו בקוד (ולא נמדדו אוטומטית)
+function codeDays(s){
+  if(!OV) return 0;
+  const from=addDays(OV.today,-7);
+  return (s.days||[]).filter(d=>d.code && d.date>=from && d.date<OV.today).length;
 }
 function renderAttention(){
   const el=document.getElementById('attention-list'); if(!el||!OV) return;
@@ -778,7 +794,7 @@ function toggleAttention(){
   if(show){ renderAttention(); el.scrollIntoView({behavior:'smooth',block:'start'}); }
 }
 function needsAttention(s){
-  return !s.consent || !s.goalHours || daysSince(s.lastSync)===null || daysSince(s.lastSync)>=2;
+  return !s.consent || !s.goalHours || daysSince(s.lastSync)===null || daysSince(s.lastSync)>=2 || codeDays(s)>=3;
 }
 
 async function loadOverview(){
