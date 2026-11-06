@@ -380,6 +380,23 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
         </div>
         <div id="support-list" class="muted">טוען...</div>
       </div>
+      <div class="card" id="broadcast-card" style="display:none">
+        <div class="card-title">הודעה לתלמידים</div>
+        <div class="card-sub">התראה חד-פעמית לטלפון של כל התלמידים (רק מי שאישר התראות)</div>
+        <div class="edit-box" style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+          <select id="bc-platform" onchange="countBroadcast()">
+            <option value="ios">אייפון</option>
+            <option value="android">אנדרואיד</option>
+            <option value="all">כולם</option>
+          </select>
+          <input type="text" id="bc-title" maxlength="60" placeholder="כותרת (למשל: עדכון חשוב)"/>
+          <textarea id="bc-body" maxlength="300" rows="3" placeholder="תוכן ההודעה" style="font-family:inherit;font-size:14px;padding:8px;border-radius:var(--r);border:1px solid var(--border2)"></textarea>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="sendBroadcast()">שלח</button>
+            <span class="muted" id="bc-msg"></span>
+          </div>
+        </div>
+      </div>
       <div class="card" id="staff-card" style="display:none">
         <div class="card-title">משתמשי צוות</div>
         <div class="card-sub">אנשים נוספים (מנהל, מחנך, יועץ) שרואים את אותו לוח, כל אחד עם שם משתמש וסיסמה משלו</div>
@@ -1267,7 +1284,29 @@ async function renderAccess(){
   }).join('');
 }
 
+// הודעה חד-פעמית לתלמידים (רק בעל החשבון)
+async function countBroadcast(){
+  const msg=document.getElementById('bc-msg');
+  const r=await api('/api/teacher/broadcast','POST',{dryRun:true, platform:document.getElementById('bc-platform').value});
+  msg.textContent = r.error ? r.error : `יקבלו: ${r.count} תלמידים`;
+  return r.count||0;
+}
+async function sendBroadcast(){
+  const title=document.getElementById('bc-title').value.trim(), body=document.getElementById('bc-body').value.trim();
+  const platform=document.getElementById('bc-platform').value, msg=document.getElementById('bc-msg');
+  if(!title||!body){ msg.textContent='צריך כותרת ותוכן'; return; }
+  const n=await countBroadcast();
+  const who={ios:'תלמידי האייפון',android:'תלמידי האנדרואיד',all:'כל התלמידים'}[platform];
+  if(!confirm(`לשלוח ל-${n} ${who}?\n\n${title}\n${body}`)) return;
+  msg.textContent='שולח...';
+  const r=await api('/api/teacher/broadcast','POST',{title,body,platform});
+  msg.textContent = r.error ? r.error : `נשלח ל-${r.sent} תלמידים${r.failed?` · ${r.failed} נכשלו (התראות כבויות או אפליקציה שהוסרה)`:''}`;
+  if(!r.error){ document.getElementById('bc-title').value=''; document.getElementById('bc-body').value=''; }
+}
+
 async function renderStaff(){
+  const bc=document.getElementById('broadcast-card');
+  if(bc){ const own = localStorage.getItem('is_staff')!=='1'; bc.style.display = own?'block':'none'; if(own) countBroadcast(); }
   const card=document.getElementById('staff-card'); if(!card) return;
   if(localStorage.getItem('is_staff')==='1'){ card.style.display='none'; return; }   // רק בעל החשבון
   card.style.display='block';
