@@ -959,11 +959,13 @@ function versionOld(s){
   const min = MIN_OK_VERSION[s.platform];
   return !!(min && s.appVersion && verNum(s.appVersion) < min);
 }
+// גרסה + מספר בנייה (6.80+, למשל "6.80 (85)")
+function verText(s){ return (s.appVersion||'') + (s.appBuild ? ` (${s.appBuild})` : ''); }
 function versionBadge(s){
   if(!s.appVersion) return '<span class="muted">—</span>';
   return versionOld(s)
-    ? `<span class="ver-old" title="צריך לעדכן">${esc(s.appVersion)} ⚠</span>`
-    : `<span class="ver-ok">${esc(s.appVersion)}</span>`;
+    ? `<span class="ver-old" title="צריך לעדכן">${esc(verText(s))} ⚠</span>`
+    : `<span class="ver-ok">${esc(verText(s))}</span>`;
 }
 
 // האם התלמיד מסנן ניווט ותפילה (תפילון) מזמן המסך
@@ -1033,7 +1035,7 @@ async function exportStudents(){
       rep++; if(info.kind==='met') met++;
       return hm(info.minutes);
     });
-    return [s.name, s.className, s.platform==='ios'?'אייפון':s.platform==='android'?'אנדרואיד':'', (s.appVersion||'')+(versionOld(s)?' (ישנה)':''), s.goalHours||'',
+    return [s.name, s.className, s.platform==='ios'?'אייפון':s.platform==='android'?'אנדרואיד':'', verText(s)+(versionOld(s)?' (ישנה)':''), s.goalHours||'',
       s.consent?'כן':'לא', navCsv(s), s.hasPush?'כן':'לא', s.lastSync ? new Date(s.lastSync).toLocaleString('he-IL') : '', rep, met, ...cells];
   });
   const csv = '\uFEFF' + [head, ...rows].map(r=>r.map(q).join(',')).join('\r\n');   // BOM: עברית תקינה ב-Excel
