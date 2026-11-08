@@ -12,7 +12,7 @@
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{--bg:#fff;--bg2:#f5f5f3;--bg3:#eeede8;--text:#1a1a18;--text2:#6b6b67;--border:rgba(0,0,0,0.12);--border2:rgba(0,0,0,0.22);--green:#3B6D11;--green-bg:#EAF3DE;--amber:#854F0B;--amber-bg:#FAEEDA;--red:#A32D2D;--red-bg:#FCEBEB;--blue:#185FA5;--blue-bg:#E6F1FB;--r:8px;--rl:12px}
-    @media(prefers-color-scheme:dark){:root{--bg:#1a1a18;--bg2:#242420;--bg3:#2c2c2a;--text:#f0efe8;--text2:#9a9a94;--border:rgba(255,255,255,0.12);--border2:rgba(255,255,255,0.22);--green-bg:#173404;--amber-bg:#412402;--red-bg:#501313;--blue-bg:#042C53}}
+    @media(prefers-color-scheme:dark){:root{--bg:#1a1a18;--bg2:#242420;--bg3:#2c2c2a;--text:#f0efe8;--text2:#9a9a94;--border:rgba(255,255,255,0.12);--border2:rgba(255,255,255,0.22);--green-bg:#173404;--amber:#E8A84A;--amber-bg:#412402;--red-bg:#501313;--blue-bg:#042C53}}
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg3);color:var(--text);min-height:100vh}
     header{background:var(--bg);border-bottom:0.5px solid var(--border);padding:0 1.5rem;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:10}
     .logo{font-size:16px;font-weight:500}
@@ -779,7 +779,9 @@ function starsHtml(list){ return list.length ? list.map(x=>STAR_ICON[x.type]).jo
 // הסיבות שבגללן תלמיד "דורש תשומת לב"
 function attentionReasons(s){
   const r=[];
-  if(!s.consent) r.push('לא אישר שיתוף נתונים');
+  if(!s.consent) r.push(daysSince(s.lastSync)!==null && daysSince(s.lastSync)<2
+    ? 'מסנכרן, אבל המתג "עמידה ביעד" כבוי (הגדרות ← הגדרות שיתוף)'
+    : 'לא אישר שיתוף נתונים');
   if(!s.goalHours) r.push('לא בחר יעד יומי');
   const d=daysSince(s.lastSync);
   if(d===null) r.push('לא סונכרן מעולם');
@@ -920,7 +922,11 @@ function renderWeek(){
   if(cls) list=list.filter(s=>s.className===cls);
   const mode=document.getElementById('rank-mode')?.value||'week';
   const PR=periodRanks(OV.students.filter(s=>s.consent), mode);
-  list.sort((a,b)=>(cls?0:String(a.className||'').localeCompare(String(b.className||''),'he')) || PR[b.id].pts-PR[a.id].pts || a.name.localeCompare(b.name,'he'));
+  // תלמידים עם בעיה (לא סונכרן, בלי יעד, גרסה ישנה, ימים בקוד) - קודם, ומסומנים
+  const probs = s => [...attentionReasons(s), ...(versionOld(s) ? ['גרסה ישנה – צריך לעדכן'] : [])];
+  const P = {}; list.forEach(s => P[s.id] = probs(s));
+  list.sort((a,b)=>(P[b.id].length>0)-(P[a.id].length>0) || (cls?0:String(a.className||'').localeCompare(String(b.className||''),'he')) || PR[b.id].pts-PR[a.id].pts || a.name.localeCompare(b.name,'he'));
+  const probLine = s => P[s.id].length ? `<div style="font-size:11px;color:var(--amber);font-weight:600;margin-top:2px">⚠ ${P[s.id].map(esc).join(' · ')}</div>` : '';
   const ws=shownWeekStart();
   const dates=[...Array(7)].map((_,i)=>addDays(ws,i));
   const fmtD=d=>`${+d.slice(8)}.${+d.slice(5,7)}`;
@@ -935,8 +941,8 @@ function renderWeek(){
   const rows=list.map(s=>{
     const wm=PR[s.id];
     const rank = wm.rank ? `${wm.rank}<span class="muted"> מתוך ${wm.size}${wm.ties?` · תיקו`:''}</span>` : '<span class="muted">—</span>';
-    return `<tr>
-      <td class="name">${platformIcon(s.platform)} <strong>${esc(s.name)}</strong> <span class="muted">${esc(s.className)}</span></td>
+    return `<tr${P[s.id].length?' style="background:var(--amber-bg)"':''}>
+      <td class="name">${platformIcon(s.platform)} <strong>${esc(s.name)}</strong> <span class="muted">${esc(s.className)}</span>${probLine(s)}</td>
       <td>${s.goalHours?s.goalHours+'ש\'':'<span class="muted">ללא</span>'}</td>
       ${dates.map(d=>`<td>${flame(dayInfo(s,d))}</td>`).join('')}
       <td><strong>${wm.met}</strong><span class="muted">/${wm.rep}</span></td>
@@ -952,9 +958,9 @@ function renderWeek(){
     const wm=PR[s.id], ach=achievements(s);
     const rank = wm.rank ? `דירוג ${wkLabel} ${wm.rank}/${wm.size}` : '';
     const goal = s.goalHours ? `יעד ${s.goalHours}ש'` : 'ללא יעד';
-    return `<div class="wk-card">
+    return `<div class="wk-card"${P[s.id].length?' style="background:var(--amber-bg)"':''}>
       <div class="wk-top">
-        <div class="wk-name">${platformIcon(s.platform)} <strong>${esc(s.name)}</strong> <span class="muted">${esc(s.className)}</span></div>
+        <div class="wk-name">${platformIcon(s.platform)} <strong>${esc(s.name)}</strong> <span class="muted">${esc(s.className)}</span>${probLine(s)}</div>
         <div class="wk-score"><strong>${wm.met}</strong><span class="muted">/${wm.rep} ביעד ${mode==='week' && weekOffset===0 ? '' : wkLabel}</span></div>
       </div>
       <div class="wk-days">${dates.map((d,i)=>`<div class="wk-day"><div class="wk-dn">${DAY_NAMES[i]}</div><div>${flame(dayInfo(s,d))}</div><div class="wk-dd">${+d.slice(8)}</div></div>`).join('')}</div>
