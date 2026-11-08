@@ -253,7 +253,8 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
       <button class="nav-btn active" onclick="showScreen('dashboard')">השבוע</button>
       <button class="nav-btn" onclick="showScreen('students')">תלמידים</button>
       <button class="nav-btn" onclick="showScreen('classes')">כיתות</button>
-      <button class="nav-btn" onclick="showScreen('manage')">ניהול <span id="support-badge" class="nav-badge" style="display:none"></span></button>
+      <button class="nav-btn" onclick="showScreen('manage')">פניות <span id="support-badge" class="nav-badge" style="display:none"></span></button>
+      <button class="nav-btn" onclick="showScreen('settings')">הגדרות</button>
       <button class="nav-btn" onclick="logout()" style="color:var(--red)">יציאה</button>
     </nav>
   </header>
@@ -363,7 +364,7 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
             </select>
           </div>
         </div>
-        <div class="muted" style="margin:6px 0 12px;font-size:13px">הפסים מראים את ההבדל בין הכיתות במדד שנבחר; החץ – שינוי לעומת התקופה הקודמת. <strong>נקודות</strong>: כל תלמידי הכיתה נכללים (גם מי שלא מדד = 0), כך שגם השתתפות חשובה. יום ביעד 3ש'=1.75, 4ש'=1.5, 5ש'=1, 6ש'=0.5; חריגה עד חצי שעה = חצי, עד שעה = רבע.</div>
+        <div class="muted" style="margin:6px 0 12px;font-size:13px">הפסים מראים את ההבדל בין הכיתות במדד שנבחר; החץ – שינוי לעומת התקופה הקודמת. <strong>נקודות</strong>: כל תלמידי הכיתה נכללים (גם מי שלא מדד = 0), כך שגם השתתפות חשובה. להבה: יעד 3ש'=20, 4ש'=15, 5ש'=10, 6ש'=5; כל כוכב +20; שבוע מלא (7 להבות) +20; חריגה עד חצי שעה = חצי, עד שעה = רבע.</div>
         <div id="classes-chart"></div>
         <div id="classes-board" style="margin-top:18px"></div>
       </div>
@@ -372,12 +373,7 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
     <div id="screen-manage" class="screen">
       <div class="card" id="support-card">
         <div class="card-title">פניות תמיכה</div>
-        <div class="card-sub">פניות שתלמידים שלחו מהאפליקציה (הגדרות ← פנייה לתמיכה)</div>
-        <div class="phone-row" id="support-phone-row">
-          <input type="tel" id="support-phone" placeholder="מספר וואטסאפ לצילומי מסך (למשל 0501234567)" inputmode="tel"/>
-          <button class="btn" onclick="saveSupportPhone()">שמור</button>
-          <span class="muted" id="support-phone-msg"></span>
-        </div>
+        <div class="card-sub">פניות שתלמידים שלחו מהאפליקציה (הגדרות ← פנייה לתמיכה). לכל פנייה: תשובה בוואטסאפ או בהתראה לטלפון.</div>
         <div id="support-list" class="muted">טוען...</div>
       </div>
       <div class="card" id="broadcast-card" style="display:none">
@@ -395,6 +391,17 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
             <button class="btn btn-primary" onclick="sendBroadcast()">שלח</button>
             <span class="muted" id="bc-msg"></span>
           </div>
+        </div>
+      </div>
+    </div>
+    <div id="screen-settings" class="screen">
+      <div class="card" id="support-phone-card">
+        <div class="card-title">וואטסאפ לתמיכה</div>
+        <div class="card-sub">המספר שאליו תלמידים שולחים צילומי מסך מהאפליקציה (הגדרות ← פנייה לתמיכה)</div>
+        <div class="phone-row" id="support-phone-row">
+          <input type="tel" id="support-phone" placeholder="מספר וואטסאפ (למשל 0501234567)" inputmode="tel"/>
+          <button class="btn" onclick="saveSupportPhone()">שמור</button>
+          <span class="muted" id="support-phone-msg"></span>
         </div>
       </div>
       <div class="card" id="staff-card" style="display:none">
@@ -724,18 +731,31 @@ function trophyNeed(ym){
   return n;
 }
 
-// ניקוד משוקלל (כמו בשרת): יום ביעד 3ש'=1.75, 4ש'=1.5, 5ש'=1, 6ש'+=0.5;
+// ניקוד משוקלל (כמו בשרת): להבה 3ש'=20, 4ש'=15, 5ש'=10, 6ש'+=5;
 // חריגה עד חצי שעה = חצי מהנקודות, עד שעה = רבע.
 function dayPoints(minutes, g){
   if(!g || minutes==null) return 0;
-  const w = g<=3?1.75 : g<=4?1.5 : g<=5?1 : 0.5, over = minutes - g*60 - 1;
+  const w = g<=3?20 : g<=4?15 : g<=5?10 : 5, over = minutes - g*60 - 1;
   return over<=0 ? w : over<=30 ? w/2 : over<=60 ? w/4 : 0;
 }
+// כמו בשרת: להבות + בונוס לכל שבוע (א'-ש') שהסתיים בטווח: כוכב (5 ביעד) = 20, שבוע מלא (7) = 20 נוספות
+const STAR_BONUS=20, FULL_WEEK_BONUS=20;
 function pointsFor(s, dates){
   let p=0;
   for(const d of dates){
     const day=(s.days||[]).find(x=>x.date===d);
     if(day && day.minutes!=null) p+=dayPoints(day.minutes, day.goalHours ?? s.goalHours);
+  }
+  if(dates.length){
+    const sorted=[...dates].sort(), from=sorted[0], to=sorted[sorted.length-1];
+    const dow=new Date(from+'T12:00:00Z').getUTCDay();
+    for(let sun=addDays(from,-dow); sun<=to; sun=addDays(sun,7)){
+      const sat=addDays(sun,6);
+      if(sat<from || sat>to || sat>=OV.today) continue;
+      let met=0; for(let i=0;i<7;i++) if(dayInfo(s,addDays(sun,i)).kind==='met') met++;
+      if(met>=5) p+=STAR_BONUS;
+      if(met===7) p+=FULL_WEEK_BONUS;
+    }
   }
   return Math.round(p*100)/100;
 }
@@ -833,12 +853,13 @@ async function loadOverview(){
 
 function showScreen(s){
   document.querySelectorAll('.screen').forEach(el=>el.classList.remove('active'));
-  document.querySelectorAll('.nav-btn').forEach((b,i)=>b.classList.toggle('active',['dashboard','students','classes','manage'][i]===s));
+  document.querySelectorAll('.nav-btn').forEach((b,i)=>b.classList.toggle('active',['dashboard','students','classes','manage','settings'][i]===s));
   document.getElementById('screen-'+s).classList.add('active');
   if(s==='dashboard') renderDashboard();
   if(s==='students') renderStudents();
   if(s==='classes') renderClasses();
   if(s==='manage') renderManage();
+  if(s==='settings') renderSettings();
 }
 
 function copyCode(){
@@ -1097,14 +1118,14 @@ function classStats(dates, by){
   for(const s of OV.students.filter(x=>x.active!==false)){
     const g=(by==='grade'?gradeName(s.className):s.className)||'ללא כיתה';
     const G=groups[g]||(groups[g]={name:g,n:0,active:0,pts:0,met:0,rep:0,mins:0,best:null});
-    let pts=0, met=0, rep=0, mins=0;
+    let met=0, rep=0, mins=0;
     for(const d of dates){
       const day=(s.days||[]).find(x=>x.date===d);
       if(!day||day.minutes==null) continue;
       rep++; mins+=day.minutes;
-      pts+=dayPoints(day.minutes, day.goalHours ?? s.goalHours);
       if(dayInfo(s,d).kind==='met') met++;
     }
+    const pts=pointsFor(s, dates);   // כולל בונוס כוכב ושבוע מלא
     G.n++; G.pts+=pts; G.met+=met; G.rep+=rep; G.mins+=mins; if(rep>0) G.active++;
     if(!G.best||pts>G.best.pts) G.best={name:s.name,pts};
   }
@@ -1313,8 +1334,6 @@ async function sendBroadcast(){
 }
 
 async function renderStaff(){
-  const bc=document.getElementById('broadcast-card');
-  if(bc){ const own = localStorage.getItem('is_staff')!=='1'; bc.style.display = own?'block':'none'; if(own) countBroadcast(); }
   const card=document.getElementById('staff-card'); if(!card) return;
   if(localStorage.getItem('is_staff')==='1'){ card.style.display='none'; return; }   // רק בעל החשבון
   card.style.display='block';
@@ -1382,9 +1401,13 @@ function diagHtml(raw){
   return `<pre class="diag">${esc(lines.join('\n'))}</pre>`;
 }
 // תשובה בוואטסאפ: נפתח עם טקסט מוכן, ובוחרים את איש הקשר (אין לנו את מספר התלמיד)
+// אם התלמיד השאיר מספר - נפתחת ישר השיחה איתו; אחרת בוחרים איש קשר
 function waReply(m){
   const first = String(m.name||'').split(' ')[0];
-  return 'https://wa.me/?text=' + encodeURIComponent(`שלום ${first}, לגבי הפנייה שלך באפליקציה "זמן מסך":\n`);
+  const txt = encodeURIComponent(`שלום ${first}, לגבי הפנייה שלך באפליקציה "זמן מסך":\n`);
+  let ph = String(m.reply_phone||'').replace(/[^\d]/g,'');
+  if(ph.startsWith('0')) ph = '972' + ph.slice(1);
+  return ph.length>=11 ? `https://wa.me/${ph}?text=${txt}` : `https://wa.me/?text=${txt}`;
 }
 // תשובה בהתראה לטלפון של התלמיד
 async function replyPush(id, name){
@@ -1408,7 +1431,7 @@ async function renderSupport(){
       <div class="sup-actions">
         ${m.diag?`<button class="btn" style="font-size:12px" onclick="this.parentNode.nextElementSibling.style.display=this.parentNode.nextElementSibling.style.display==='none'?'block':'none'">נתוני אבחון</button>`:''}
         <button class="btn" style="font-size:12px" onclick="markSupport(${m.id}, ${!m.handled})">${m.handled?'החזר לפתוחות':'סמן כטופל'}</button>
-        <a class="btn" style="font-size:12px;text-decoration:none" target="_blank" rel="noopener" href="${waReply(m)}">💬 וואטסאפ</a>
+        <a class="btn" style="font-size:12px;text-decoration:none" target="_blank" rel="noopener" href="${waReply(m)}">💬 וואטסאפ${m.reply_phone?' · '+esc(m.reply_phone):''}</a>
         <button class="btn" style="font-size:12px" onclick="replyPush(${m.id}, '${esc(String(m.name||'').replace(/'/g,''))}')">🔔 תשובה בהתראה</button>
       </div>
       ${m.diag?`<div style="display:none">${diagHtml(m.diag)}</div>`:''}
@@ -1438,8 +1461,14 @@ async function markSupport(id, handled){
   renderSupport();
 }
 
-async function renderManage(){
+// מסך "פניות": פניות תמיכה (עם תשובה בוואטסאפ/בהתראה) + הודעה לכל התלמידים
+function renderManage(){
   renderSupport();
+  const bc=document.getElementById('broadcast-card');
+  if(bc){ const own = localStorage.getItem('is_staff')!=='1'; bc.style.display = own?'block':'none'; if(own) countBroadcast(); }
+}
+// מסך "הגדרות": וואטסאפ לתמיכה, צוות, יומן צפיות, קוד מוסד, ניהול תלמידים, מחיקת מרחב
+async function renderSettings(){
   loadSupportPhone();
   renderAccess();
   renderStaff();
@@ -1496,13 +1525,13 @@ async function saveStudent(id){
   const r=await api('/api/students/'+id,'PATCH',{name,className});
   if(r.error){ msg.textContent='שגיאה: '+r.error; return; }
   OV=null;            // הלשוניות האחרות ייטענו מחדש עם השם החדש
-  renderManage();
+  renderSettings();
 }
 
 async function removeStudent(id){
   if(!confirm('להסיר את התלמיד?')) return;
   await api('/api/students/'+id,'DELETE');
-  renderManage();
+  renderSettings();
 }
 
 if(token){
