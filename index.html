@@ -918,10 +918,12 @@ function weekWord(){ return weekOffset===0 ? 'השבוע' : weekOffset===1 ? 'ש
 function renderWeek(){
   if(!OV) return;
   const cls=document.getElementById('dash-class')?.value||'';
-  let list=OV.students.filter(s=>s.consent);
+  // גם תלמידים בלי הסכמה מופיעים (בראש, כבעיה) - בלי נתונים, רק כדי שתדע שהם קיימים
+  let list=OV.students.filter(s=>s.active!==false);
   if(cls) list=list.filter(s=>s.className===cls);
   const mode=document.getElementById('rank-mode')?.value||'week';
   const PR=periodRanks(OV.students.filter(s=>s.consent), mode);
+  for(const s of list) if(!PR[s.id]) PR[s.id]={met:0,rep:0,pts:0,rank:null,size:0,ties:0};
   // תלמידים עם בעיה (לא סונכרן, בלי יעד, גרסה ישנה, ימים בקוד) - קודם, ומסומנים
   const probs = s => [...attentionReasons(s), ...(versionOld(s) ? ['גרסה ישנה – צריך לעדכן'] : [])];
   const P = {}; list.forEach(s => P[s.id] = probs(s));
