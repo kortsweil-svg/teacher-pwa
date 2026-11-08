@@ -1381,6 +1381,19 @@ function diagHtml(raw){
   if(d.diagError) lines.push('שגיאת אבחון: ' + d.diagError);
   return `<pre class="diag">${esc(lines.join('\n'))}</pre>`;
 }
+// תשובה בוואטסאפ: נפתח עם טקסט מוכן, ובוחרים את איש הקשר (אין לנו את מספר התלמיד)
+function waReply(m){
+  const first = String(m.name||'').split(' ')[0];
+  return 'https://wa.me/?text=' + encodeURIComponent(`שלום ${first}, לגבי הפנייה שלך באפליקציה "זמן מסך":\n`);
+}
+// תשובה בהתראה לטלפון של התלמיד
+async function replyPush(id, name){
+  const text = prompt(`תשובה ל${name} (תגיע כהתראה לטלפון):`);
+  if(!text || !text.trim()) return;
+  const r = await api(`/api/teacher/support/${id}/reply`,'POST',{text:text.trim()});
+  alert(r.error ? r.error : 'נשלח ✓ (הפנייה סומנה כטופלה)');
+  if(!r.error) renderSupport();
+}
 async function renderSupport(){
   const el = document.getElementById('support-list'); if(!el) return;
   await loadSupport();
@@ -1395,6 +1408,8 @@ async function renderSupport(){
       <div class="sup-actions">
         ${m.diag?`<button class="btn" style="font-size:12px" onclick="this.parentNode.nextElementSibling.style.display=this.parentNode.nextElementSibling.style.display==='none'?'block':'none'">נתוני אבחון</button>`:''}
         <button class="btn" style="font-size:12px" onclick="markSupport(${m.id}, ${!m.handled})">${m.handled?'החזר לפתוחות':'סמן כטופל'}</button>
+        <a class="btn" style="font-size:12px;text-decoration:none" target="_blank" rel="noopener" href="${waReply(m)}">💬 וואטסאפ</a>
+        <button class="btn" style="font-size:12px" onclick="replyPush(${m.id}, '${esc(String(m.name||'').replace(/'/g,''))}')">🔔 תשובה בהתראה</button>
       </div>
       ${m.diag?`<div style="display:none">${diagHtml(m.diag)}</div>`:''}
     </div>`;
