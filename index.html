@@ -395,6 +395,20 @@ header{padding-top:env(safe-area-inset-top);height:auto;min-height:56px}
       </div>
     </div>
     <div id="screen-settings" class="screen">
+      <div class="card" id="my-class-card">
+        <div class="card-title">הכיתה שלי</div>
+        <div class="card-sub">הלוח ייפתח אצלך ישר על הכיתה הזו (לכל משתמש בנפרד)</div>
+        <div class="phone-row">
+          <select id="my-class"><option value="">כל הכיתות</option></select>
+          <button class="btn" onclick="saveMyClass()">שמור</button>
+          <span class="muted" id="my-class-msg"></span>
+        </div>
+      </div>
+      <div class="card" id="year-card" style="display:none">
+        <div class="card-title">מעבר שנה</div>
+        <div class="card-sub">בתחילת שנה: כל הכיתות עולות שכבה (ט׳→י׳, י׳→י״א, י״א→י״ב), ומסיימי י״ב מושבתים. כל הנתונים נשמרים, וההשוואות של השנה שעברה ממשיכות להציג את הכיתה של אותה שנה.</div>
+        <div id="year-box" style="margin-top:10px"><button class="btn" onclick="previewYear()">הצג מה ישתנה</button></div>
+      </div>
       <div class="card" id="support-phone-card">
         <div class="card-title">וואטסאפ לתמיכה</div>
         <div class="card-sub">המספר שאליו תלמידים שולחים צילומי מסך מהאפליקציה (הגדרות ← פנייה לתמיכה)</div>
@@ -846,9 +860,19 @@ async function loadOverview(){
     const sel=document.getElementById(id); if(!sel) continue;
     const cur=sel.value;
     sel.innerHTML='<option value="">כל הכיתות</option>'+classes.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
-    sel.value=cur;
+    // בפעם הראשונה: הכיתה שהמשתמש בחר כברירת מחדל (הגדרות ← הכיתה שלי)
+    sel.value = (!defaultApplied && OV.myDefaultClass && classes.includes(normClass(OV.myDefaultClass))) ? normClass(OV.myDefaultClass) : cur;
   }
+  defaultApplied = true;
   return true;
+}
+let defaultApplied = false;
+// הכיתה של תלמיד בתאריך מסוים: אחרי מעבר שנה - הכיתה של אותה שנת לימודים
+function classAt(s, iso){
+  if(!s.classHistory || !iso) return s.className;
+  const [y,m]=iso.split('-').map(Number), yr = m>=9 ? y : y-1;
+  const c = s.classHistory[yr];
+  return c ? normClass(c) : s.className;
 }
 
 function showScreen(s){
@@ -1116,7 +1140,8 @@ const gradeName = c => String(c||'').replace(/\s*\d+\s*$/,'').trim();
 function classStats(dates, by){
   const groups={};
   for(const s of OV.students.filter(x=>x.active!==false)){
-    const g=(by==='grade'?gradeName(s.className):s.className)||'ללא כיתה';
+    const cAt=classAt(s, dates[0]);   // בתקופה של שנה קודמת - הכיתה של אותה שנה
+    const g=(by==='grade'?gradeName(cAt):cAt)||'ללא כיתה';
     const G=groups[g]||(groups[g]={name:g,n:0,active:0,pts:0,met:0,rep:0,mins:0,best:null});
     let met=0, rep=0, mins=0;
     for(const d of dates){
@@ -1468,7 +1493,50 @@ function renderManage(){
   if(bc){ const own = localStorage.getItem('is_staff')!=='1'; bc.style.display = own?'block':'none'; if(own) countBroadcast(); }
 }
 // מסך "הגדרות": וואטסאפ לתמיכה, צוות, יומן צפיות, קוד מוסד, ניהול תלמידים, מחיקת מרחב
+// ─── הכיתה שלי ───
+async function loadMyClass(){
+  if(!(await loadOverview())) return;
+  const sel=document.getElementById('my-class');
+  const classes=[...new Set(OV.students.map(s=>s.className))].sort();
+  sel.innerHTML='<option value="">כל הכיתות</option>'+classes.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  sel.value=OV.myDefaultClass ? normClass(OV.myDefaultClass) : '';
+}
+async function saveMyClass(){
+  const v=document.getElementById('my-class').value;
+  const r=await api('/api/teacher/default-class','PUT',{className:v});
+  document.getElementById('my-class-msg').textContent = r.error ? r.error : '✓ נשמר';
+  if(!r.error && OV) OV.myDefaultClass = v || null;
+  const d=document.getElementById('dash-class'); if(d && !r.error){ d.value=v; }
+}
+// ─── מעבר שנה (רק בעל החשבון) ───
+async function previewYear(){
+  const box=document.getElementById('year-box'); box.innerHTML='<span class="muted">טוען...</span>';
+  const r=await api('/api/teacher/year-transition','POST',{dryRun:true});
+  if(r.error){ box.innerHTML=`<span class="muted">${esc(r.error)}</span>`; return; }
+  const rows=r.classes.map(c=>`<tr><td>${esc(c.from)}</td><td>←</td><td><strong>${esc(c.to)}</strong></td><td class="muted">${c.count} תלמידים</td></tr>`).join('');
+  box.innerHTML = r.already
+    ? `<div class="muted" style="margin-bottom:8px">מעבר השנה של ${esc(r.yearLabel)} בוצע ב-${new Date(r.already).toLocaleDateString('he-IL')}.</div>
+       <button class="btn" onclick="undoYear()">בטל את מעבר השנה</button>`
+    : `<div style="overflow-x:auto"><table class="week-table" style="margin-bottom:10px"><tbody>${rows}</tbody></table></div>
+       <div class="muted" style="margin-bottom:8px">סוף שנת ${esc(r.yearLabel)} · ${r.total} תלמידים פעילים</div>
+       <button class="btn btn-primary" onclick="runYear()">בצע מעבר שנה</button>`;
+}
+async function runYear(){
+  if(!confirm('לבצע מעבר שנה לכל הכיתות? (אפשר לבטל אחר כך)')) return;
+  const r=await api('/api/teacher/year-transition','POST',{});
+  alert(r.error ? r.error : `בוצע ✓ · ${r.graduated||0} מסיימים הושבתו`);
+  OV=null; previewYear();
+}
+async function undoYear(){
+  if(!confirm('לבטל את מעבר השנה ולהחזיר את הכיתות הקודמות?')) return;
+  const r=await api('/api/teacher/year-transition','POST',{undo:true});
+  alert(r.error ? r.error : 'בוטל ✓ הכיתות חזרו');
+  OV=null; previewYear();
+}
+
 async function renderSettings(){
+  loadMyClass();
+  const yc=document.getElementById('year-card'); if(yc) yc.style.display = localStorage.getItem('is_staff')!=='1' ? 'block' : 'none';
   loadSupportPhone();
   renderAccess();
   renderStaff();
